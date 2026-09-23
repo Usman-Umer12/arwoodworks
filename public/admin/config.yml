@@ -20,13 +20,11 @@ collections:
 
     fields:
 
-      # Product Name
       - label: "Product Name"
         name: "title"
         widget: "string"
         required: true
 
-      # Product Category
       - label: "Category"
         name: "category"
         widget: "select"
@@ -39,7 +37,6 @@ collections:
           - "L.Shape Sofa"
           - "King Size Bed"
 
-      # Product Price
       - label: "Price"
         name: "price"
         widget: "number"
@@ -47,13 +44,11 @@ collections:
         value_type: "int"
         min: 0
 
-      # Product Description
       - label: "Description"
         name: "description"
         widget: "text"
         required: true
 
-      # Product Image
       - label: "Product Image"
         name: "image"
         widget: "image"
