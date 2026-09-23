@@ -1,0 +1,60 @@
+backend:
+  name: git-gateway
+  branch: main
+
+media_folder: "public/uploads"
+public_folder: "/uploads"
+
+collections:
+
+  # ============================================================
+  # PRODUCTS
+  # ============================================================
+
+  - name: "products"
+    label: "Products"
+    label_singular: "Product"
+    folder: "content/products"
+    create: true
+    slug: "{{slug}}"
+
+    fields:
+
+      # Product Name
+      - label: "Product Name"
+        name: "title"
+        widget: "string"
+        required: true
+
+      # Product Category
+      - label: "Category"
+        name: "category"
+        widget: "select"
+        required: true
+        options:
+          - "Dining Table"
+          - "Restaurant Furniture"
+          - "Sofa Set"
+          - "Wooden Sofa"
+          - "L.Shape Sofa"
+          - "King Size Bed"
+
+      # Product Price
+      - label: "Price"
+        name: "price"
+        widget: "number"
+        required: true
+        value_type: "int"
+        min: 0
+
+      # Product Description
+      - label: "Description"
+        name: "description"
+        widget: "text"
+        required: true
+
+      # Product Image
+      - label: "Product Image"
+        name: "image"
+        widget: "image"
+        required: true
