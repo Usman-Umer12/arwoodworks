@@ -220,7 +220,7 @@ export default function Navbar() {
                     : "invisible -translate-y-2 opacity-0"
                   }`}
               >
-                <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_20px_55px_rgba(20,40,61,0.15)]">
+                <div className="overflow-hidden border border-slate-200/80 bg-white shadow-[0_20px_55px_rgba(20,40,61,0.15)]">
 
                   {/* DROPDOWN HEADER */}
 

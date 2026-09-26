@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   Routes,
@@ -15,6 +14,10 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Products from "./pages/Products";
 import Cart from "./pages/Cart";
+import AdminLogin from "./pages/AdminLogin";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminRoute from "./components/AdminRoute";
+import AdminProducts from "./pages/AdminProducts";
 
 // Common Layout
 const Layout = () => (
@@ -37,27 +40,46 @@ const HomePage = () => (
 const App = () => {
   return (
     <Routes>
+
+      {/* Admin */}
+<Route path="/admin/login" element={<AdminLogin />} />
+
+<Route
+  path="/admin"
+  element={
+    <AdminRoute>
+      <AdminDashboard />
+    </AdminRoute>
+  }
+/>
+
+<Route
+  path="/admin/products"
+  element={
+    <AdminRoute>
+      <AdminProducts />
+    </AdminRoute>
+  }
+/>
+      {/* Public Website */}
       <Route element={<Layout />}>
-        {/* Home */}
+
         <Route path="/" element={<HomePage />} />
 
-        {/* About & Contact */}
         <Route path="/about" element={<About />} />
+
         <Route path="/contact" element={<Contact />} />
 
-        {/* All Products */}
         <Route path="/products" element={<Products />} />
 
-        {/* Category Products */}
         <Route
           path="/products/:category"
           element={<Products />}
         />
 
-        {/* Cart */}
         <Route path="/cart" element={<Cart />} />
+        
 
-        {/* 404 Page */}
         <Route
           path="*"
           element={
@@ -68,7 +90,9 @@ const App = () => {
             </div>
           }
         />
+
       </Route>
+
     </Routes>
   );
 };
