@@ -5,88 +5,282 @@ import {
   Outlet,
 } from "react-router-dom";
 
+/* ============================================================
+   PUBLIC COMPONENTS
+============================================================ */
+
 import Navbar from "./components/Navbar";
 import Home from "./components/Home";
 import CategoriesProduct from "./components/CategoriesProduct";
 import Footer from "./components/Footer";
 
+/* ============================================================
+   PUBLIC PAGES
+============================================================ */
+
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Products from "./pages/Products";
 import Cart from "./pages/Cart";
+
+/* ============================================================
+   ADMIN PAGES
+============================================================ */
+
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
-import AdminRoute from "./components/AdminRoute";
 import AdminProducts from "./pages/AdminProducts";
 
-// Common Layout
-const Layout = () => (
-  <>
-    <Navbar />
-    <Outlet />
-    <Footer />
-  </>
-);
+/* ============================================================
+   ADMIN ROUTE PROTECTION
+============================================================ */
 
-// Home Page
-const HomePage = () => (
-  <>
-    <Home />
-    <CategoriesProduct />
-  </>
-);
+import AdminRoute from "./components/AdminRoute";
+import AdminHero from "./pages/AdminHero";
+import AdminReviews from "./pages/AdminReviews";
+import Reviews from "./components/Reviews";
 
-// Main App
+/* ============================================================
+   COMMON PUBLIC LAYOUT
+============================================================ */
+
+const Layout = () => {
+  return (
+    <>
+      {/* ======================================================
+          NAVBAR
+      ====================================================== */}
+
+      <Navbar />
+
+      {/* ======================================================
+          PAGE CONTENT
+      ====================================================== */}
+
+      <Outlet />
+
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
+
+      <Footer />
+    </>
+  );
+};
+
+/* ============================================================
+   HOME PAGE
+============================================================ */
+
+const HomePage = () => {
+  return (
+    <>
+      <Home />
+      <CategoriesProduct />
+          </>
+  );
+};
+
+/* ============================================================
+   MAIN APP
+============================================================ */
+
 const App = () => {
   return (
     <Routes>
 
-      {/* Admin */}
-<Route path="/admin/login" element={<AdminLogin />} />
+      {/* ======================================================
+          ADMIN LOGIN
+          /admin/login
+      ====================================================== */}
 
-<Route
-  path="/admin"
-  element={
-    <AdminRoute>
-      <AdminDashboard />
-    </AdminRoute>
-  }
-/>
+      <Route
+        path="/admin/login"
+        element={<AdminLogin />}
+      />
 
-<Route
-  path="/admin/products"
-  element={
-    <AdminRoute>
-      <AdminProducts />
-    </AdminRoute>
-  }
-/>
-      {/* Public Website */}
+      {/* ======================================================
+          ADMIN DASHBOARD
+          /admin
+      ====================================================== */}
+
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        }
+      />
+
+      {/* ======================================================
+          ADMIN PRODUCTS
+          /admin/products
+      ====================================================== */}
+
+      <Route
+        path="/admin/products"
+        element={
+          <AdminRoute>
+            <AdminProducts />
+          </AdminRoute>
+        }
+      />
+
+      {/* ======================================================
+          PUBLIC WEBSITE LAYOUT
+      ====================================================== */}
+
       <Route element={<Layout />}>
 
-        <Route path="/" element={<HomePage />} />
+        {/* ====================================================
+            HOME
+            /
+        ==================================================== */}
 
-        <Route path="/about" element={<About />} />
+        <Route
+          path="/"
+          element={<HomePage />}
+        />
 
-        <Route path="/contact" element={<Contact />} />
+        {/* ====================================================
+            ABOUT
+            /about
+        ==================================================== */}
 
-        <Route path="/products" element={<Products />} />
+        <Route
+          path="/about"
+          element={<About />}
+        />
+
+        {/* ====================================================
+            CONTACT
+            /contact
+        ==================================================== */}
+
+        <Route
+          path="/contact"
+          element={<Contact />}
+        />
+
+        {/* ====================================================
+            PRODUCTS
+            /products
+        ==================================================== */}
+
+        <Route
+          path="/products"
+          element={<Products />}
+        />
+
+        {/* ====================================================
+            PRODUCT CATEGORY
+            /products/dining-table
+            /products/restaurant-furniture
+            /products/sofa-set
+            /products/wooden-sofa
+            /products/l-shape-sofa
+            /products/king-size-bed
+        ==================================================== */}
 
         <Route
           path="/products/:category"
           element={<Products />}
         />
 
-        <Route path="/cart" element={<Cart />} />
-        
+        {/* ====================================================
+            CART
+            /cart
+        ==================================================== */}
+
+        <Route
+          path="/cart"
+          element={<Cart />}
+        />
+
+        <Route
+  path="/admin/herr"
+  element={
+    <AdminRoute>
+      <AdminHero />
+    </AdminRoute>
+  }
+/>
+
+<Route
+  path="/admin/reviews"
+  element={
+    <AdminRoute>
+      <AdminReviews />
+    </AdminRoute>
+  }
+/>
+
+<Route
+  path="/admin/reviews"
+  element={
+    <AdminRoute>
+      <AdminReviews />
+    </AdminRoute>
+  }
+/>
+
+
+        {/* ====================================================
+            404 PAGE
+        ==================================================== */}
 
         <Route
           path="*"
           element={
-            <div className="flex min-h-[50vh] items-center justify-center px-4">
-              <h1 className="text-3xl font-bold text-[#14283D] text-center">
-                404 - Page Not Found
-              </h1>
+            <div
+              className="
+                flex
+                min-h-[50vh]
+                items-center
+                justify-center
+                px-4
+              "
+            >
+              <div className="text-center">
+
+                <p
+                  className="
+                    mb-2
+                    text-sm
+                    font-semibold
+                    uppercase
+                    tracking-[0.2em]
+                    text-[#079FC0]
+                  "
+                >
+                  AR Woodworks
+                </p>
+
+                <h1
+                  className="
+                    text-3xl
+                    font-bold
+                    text-[#14283D]
+                    sm:text-4xl
+                  "
+                >
+                  404 - Page Not Found
+                </h1>
+
+                <p
+                  className="
+                    mt-3
+                    text-sm
+                    text-slate-500
+                    sm:text-base
+                  "
+                >
+                  The page you are looking for
+                  does not exist.
+                </p>
+
+              </div>
             </div>
           }
         />

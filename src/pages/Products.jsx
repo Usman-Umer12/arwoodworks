@@ -11,7 +11,6 @@ import {
   Search,
   ShoppingBag,
   MessageCircle,
-  Eye,
   X,
   Check,
   SlidersHorizontal,
@@ -20,6 +19,7 @@ import {
   RefreshCw,
   AlertCircle,
 } from "lucide-react";
+import AnnouncementBar from "../components/AnnouncementBar";
 
 import { supabase } from "../lib/supabase";
 
@@ -62,7 +62,10 @@ const CART_KEY = "cart";
 
 const WHATSAPP_NUMBER = "923033939167";
 
-const DELIVERY_TEXT = "Delivery all over Pakistan.";
+const DELIVERY_TITLE = "All over pakistan";
+
+const DELIVERY_TEXT =
+  "Safe & fast delivery across Pakistan.";
 
 /* ============================================================
    CART STORAGE
@@ -182,8 +185,6 @@ export default function Products() {
 
   /* ==========================================================
      FETCH PRODUCTS FROM SUPABASE
-     
-     SUPABASE IS THE ONLY PRODUCT SOURCE
   ========================================================== */
 
   const fetchProducts = async () => {
@@ -293,17 +294,9 @@ export default function Products() {
   const filteredProducts = useMemo(() => {
     let result = products.filter(
       (product) => {
-        /* ====================================================
-           CATEGORY
-        ==================================================== */
-
         const matchesCategory =
           activeCategory === "all" ||
           product.slug === activeCategory;
-
-        /* ====================================================
-           SEARCH
-        ==================================================== */
 
         const searchValue =
           search.toLowerCase().trim();
@@ -417,13 +410,15 @@ export default function Products() {
 
     const previousOverflow =
       document.body.style.overflow;
-const handleKeyDown = (event) => {
-  if (event.key === "Escape") {
-    setPreview(null);
-  }
-};
 
-    document.body.style.overflow = "hidden";
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setPreview(null);
+      }
+    };
+
+    document.body.style.overflow =
+      "hidden";
 
     window.addEventListener(
       "keydown",
@@ -439,10 +434,33 @@ const handleKeyDown = (event) => {
         handleKeyDown
       );
     };
-  }, [
-    preview,
-    filteredProducts,
-  ]);
+  }, [preview]);
+
+  /* ==========================================================
+     OPEN PRODUCT PREVIEW
+  ========================================================== */
+
+  const openProductPreview = (product) => {
+    setPreview(product);
+  };
+
+  /* ==========================================================
+     PRODUCT CARD KEYBOARD SUPPORT
+  ========================================================== */
+
+  const handleProductCardKeyDown = (
+    event,
+    product
+  ) => {
+    if (
+      event.key === "Enter" ||
+      event.key === " "
+    ) {
+      event.preventDefault();
+
+      openProductPreview(product);
+    }
+  };
 
   /* ==========================================================
      ADD PRODUCT TO CART
@@ -568,7 +586,10 @@ const handleKeyDown = (event) => {
 
     const zigzag = Math.min(
       70,
-      Math.max(24, Math.abs(dx) * 0.12)
+      Math.max(
+        24,
+        Math.abs(dx) * 0.12
+      )
     );
 
     pendingRef.current.add(product.id);
@@ -743,8 +764,6 @@ const handleKeyDown = (event) => {
     );
   };
 
-  
-
   /* ==========================================================
      LOADING
   ========================================================== */
@@ -753,14 +772,11 @@ const handleKeyDown = (event) => {
     return (
       <section className="flex min-h-screen items-center justify-center bg-[#F7F9FA] px-4">
         <div className="text-center">
-
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
-
             <RefreshCw
               size={25}
               className="animate-spin text-[#079FC0]"
             />
-
           </div>
 
           <h2 className="text-lg font-bold text-[#172B3A]">
@@ -771,7 +787,6 @@ const handleKeyDown = (event) => {
             Please wait while we load our
             furniture collection.
           </p>
-
         </div>
       </section>
     );
@@ -782,8 +797,10 @@ const handleKeyDown = (event) => {
   ========================================================== */
 
   return (
+    <>
+    <AnnouncementBar/>
+    
     <section className="min-h-screen bg-[#F7F9FA] text-[#172B3A]">
-
       <style>{`
 
         @keyframes cartBadgePop {
@@ -822,6 +839,10 @@ const handleKeyDown = (event) => {
           will-change: transform, opacity;
         }
 
+        .product-card {
+          -webkit-tap-highlight-color: transparent;
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .cart-badge-pop {
             animation: none !important;
@@ -845,20 +866,15 @@ const handleKeyDown = (event) => {
           <div className="relative z-10 max-w-2xl">
 
             <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-300 sm:mb-4 sm:text-sm">
-
               <span className="h-px w-7 bg-cyan-400 sm:w-8" />
 
               Furniture Collection
-
             </div>
 
             <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-
               Discover furniture designed-
               <br className="hidden sm:block" />
-
               for your space.
-
             </h1>
 
             <p className="mt-3 max-w-lg text-xs leading-5 text-slate-300 sm:mt-4 sm:text-base sm:leading-6">
@@ -867,14 +883,26 @@ const handleKeyDown = (event) => {
               workspace.
             </p>
 
-            <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-[10px] font-medium text-slate-200 sm:mt-5 sm:text-sm">
+            {/* HERO DELIVERY */}
 
-              <Truck
-                size={15}
-                className="shrink-0 text-cyan-300"
-              />
+            <div className="mt-4 inline-flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-left backdrop-blur-sm sm:mt-5 sm:px-4 sm:py-3">
 
-              Delivery all over Pakistan
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-400/10 sm:h-9 sm:w-9">
+                <Truck
+                  size={16}
+                  className="text-cyan-300"
+                />
+              </div>
+
+              <div>
+                <p className="text-[10px] font-bold text-white sm:text-xs">
+                  {DELIVERY_TITLE}
+                </p>
+
+                <p className="mt-0.5 text-[9px] leading-4 text-slate-300 sm:text-[11px]">
+                  {DELIVERY_TEXT}
+                </p>
+              </div>
 
             </div>
 
@@ -1072,7 +1100,40 @@ const handleKeyDown = (event) => {
               return (
                 <article
                   key={product.id}
-                  className="group min-w-0 overflow-hidden rounded-xl border border-slate-200/80 bg-white transition duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-xl hover:shadow-slate-200/60"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View ${product.title}`}
+                  onClick={() =>
+                    openProductPreview(product)
+                  }
+                  onKeyDown={(event) =>
+                    handleProductCardKeyDown(
+                      event,
+                      product
+                    )
+                  }
+                  className="
+                    product-card
+                    group
+                    min-w-0
+                    cursor-pointer
+                    overflow-hidden
+                    rounded-xl
+                    border
+                    border-slate-200/80
+                    bg-white
+                    outline-none
+                    transition-all
+                    duration-300
+                    hover:-translate-y-1
+                    hover:border-cyan-200
+                    hover:shadow-xl
+                    hover:shadow-slate-200/60
+                    focus-visible:ring-2
+                    focus-visible:ring-[#079FC0]
+                    focus-visible:ring-offset-2
+                    active:scale-[0.995]
+                  "
                 >
 
                   {/* ==================================================
@@ -1094,7 +1155,7 @@ const handleKeyDown = (event) => {
                         loading="lazy"
                         decoding="async"
                         fetchPriority="low"
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
                       />
 
                     ) : (
@@ -1116,32 +1177,31 @@ const handleKeyDown = (event) => {
 
                     {/* CATEGORY */}
 
-                    <span className="absolute left-1.5 top-1.5 max-w-[calc(100%-3rem)] truncate rounded-md bg-white/95 px-2 py-1 text-[7px] font-semibold text-[#087F99] shadow-sm sm:left-3 sm:top-3 sm:px-2.5 sm:py-1.5 sm:text-[10px]">
+                    <span
+                      className="
+                        absolute
+                        left-1.5
+                        top-1.5
+                        max-w-[calc(100%-1.5rem)]
+                        truncate
+                        rounded-md
+                        bg-white/95
+                        px-2
+                        py-1
+                        text-[7px]
+                        font-semibold
+                        text-[#087F99]
+                        shadow-sm
+                        backdrop-blur-sm
+                        sm:left-3
+                        sm:top-3
+                        sm:px-2.5
+                        sm:py-1.5
+                        sm:text-[10px]
+                      "
+                    >
                       {product.category}
                     </span>
-
-                    {/* PREVIEW */}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPreview(product)
-                      }
-                      aria-label={`View ${product.title} full size`}
-                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-[#14283D] shadow-sm transition hover:bg-[#079FC0] hover:text-white sm:right-3 sm:top-3 sm:h-9 sm:w-9 sm:rounded-lg"
-                    >
-
-                      <Eye
-                        size={14}
-                        className="sm:hidden"
-                      />
-
-                      <Eye
-                        size={17}
-                        className="hidden sm:block"
-                      />
-
-                    </button>
 
                   </div>
 
@@ -1180,22 +1240,43 @@ const handleKeyDown = (event) => {
                       </div>
                     )}
 
-                    {/* DELIVERY */}
+                    {/* ==================================================
+                        DELIVERY — PROFESSIONAL
+                    ================================================== */}
 
-                    <div className="mt-2 flex items-start gap-1 text-[7px] font-semibold leading-3 text-[#0789A6] sm:mt-2.5 sm:gap-1.5 sm:text-xs sm:leading-4">
+                    <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 sm:mt-3 sm:gap-2.5 sm:px-3 sm:py-2.5">
 
-                      <Truck
-                        size={11}
-                        className="mt-0.5 shrink-0 sm:h-[13px] sm:w-[13px]"
-                      />
+                      {/* ICON */}
 
-                      <span>
-                        {DELIVERY_TEXT}
-                      </span>
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-[#079FC0] shadow-sm ring-1 ring-slate-100 sm:h-8 sm:w-8">
+
+                        <Truck
+                          size={14}
+                          strokeWidth={2}
+                          className="sm:h-[15px] sm:w-[15px]"
+                        />
+
+                      </div>
+
+                      {/* TEXT */}
+
+                      <div className="min-w-0">
+
+                        <p className="text-[8px] font-bold leading-3.5 text-[#172B3A] sm:text-[11px] sm:leading-4">
+                          {DELIVERY_TITLE}
+                        </p>
+
+                        <p className="mt-0.5 text-[7px] leading-3 text-slate-500 sm:text-[10px] sm:leading-3.5">
+                          {DELIVERY_TEXT}
+                        </p>
+
+                      </div>
 
                     </div>
 
-                    {/* ACTIONS */}
+                    {/* ==================================================
+                        ACTIONS
+                    ================================================== */}
 
                     <div className="mt-2.5 grid grid-cols-[1fr_32px] gap-1.5 sm:mt-3 sm:grid-cols-[1fr_44px] sm:gap-2">
 
@@ -1203,9 +1284,11 @@ const handleKeyDown = (event) => {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          addToCart(product)
-                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          addToCart(product);
+                        }}
                         disabled={isAdding}
                         aria-live="polite"
                         className={`flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[8px] font-semibold text-white transition-all duration-200 disabled:cursor-wait sm:gap-2 sm:px-2 sm:py-2.5 sm:text-sm ${
@@ -1253,9 +1336,11 @@ const handleKeyDown = (event) => {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          openWhatsApp(product)
-                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          openWhatsApp(product);
+                        }}
                         aria-label={`Ask about ${product.title} on WhatsApp`}
                         className="flex h-8 items-center justify-center rounded-lg border border-[#BDE8D0] bg-[#F0FBF5] text-[#21834D] transition hover:bg-[#21834D] hover:text-white sm:h-10"
                       >
@@ -1301,6 +1386,9 @@ const handleKeyDown = (event) => {
 
             <Link
               to="/products"
+              onClick={(event) =>
+                event.stopPropagation()
+              }
               className="mt-5 inline-flex rounded-lg bg-[#079FC0] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#087F99]"
             >
               View all products
@@ -1396,27 +1484,25 @@ const handleKeyDown = (event) => {
 
             </div>
 
-           {/* ======================================================
-    IMAGE
-====================================================== */}
+            {/* IMAGE */}
 
-<div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-50 p-2 sm:p-5">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-50 p-2 sm:p-5">
 
-  {preview.image ? (
-    <img
-      src={preview.image}
-      alt={preview.title}
-      loading="eager"
-      decoding="async"
-      className="max-h-[72dvh] max-w-full object-contain"
-    />
-  ) : (
-    <p className="text-sm text-slate-500">
-      Image unavailable
-    </p>
-  )}
+              {preview.image ? (
+                <img
+                  src={preview.image}
+                  alt={preview.title}
+                  loading="eager"
+                  decoding="async"
+                  className="max-h-[72dvh] max-w-full object-contain"
+                />
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Image unavailable
+                </p>
+              )}
 
-</div>
+            </div>
 
             {/* FOOTER */}
 
@@ -1471,5 +1557,7 @@ const handleKeyDown = (event) => {
       )}
 
     </section>
+    </>
+
   );
 }

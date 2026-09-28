@@ -165,7 +165,7 @@ const Footer = () => {
                   size={17}
                   className="shrink-0 text-[#39B9E8]"
                 />
-                <span>Lahore, Pakistan</span>
+                <span>Karachi, Pakistan</span>
               </div>
             </div>
 
