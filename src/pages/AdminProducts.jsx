@@ -5,10 +5,7 @@ import React, {
   useState,
 } from "react";
 
-import {
-  Link,
-  NavLink,
-} from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 import {
   LayoutDashboard,
@@ -32,6 +29,8 @@ import {
   Filter,
   ChevronDown,
   Boxes,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
@@ -40,14 +39,12 @@ import { supabase } from "../lib/supabase";
 // CONSTANTS
 // ============================================================
 
-const DELIVERY_TEXT =
-  "Delivery all over Pakistan.";
+const DEFAULT_DELIVERY = "Delivery all over Pakistan.";
 
-const MAX_IMAGE_SIZE =
-  5 * 1024 * 1024;
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
-const STORAGE_BUCKET =
-  "product-images";
+const STORAGE_BUCKET = "product-images";
 
 const STORAGE_MARKER =
   "/storage/v1/object/public/product-images/";
@@ -82,13 +79,15 @@ const CATEGORIES = [
 const EMPTY_FORM = {
   title: "",
   description: "",
+  delivery: DEFAULT_DELIVERY,
   price: "",
   category: "Dining Table",
   status: "active",
   featured: false,
-  imageFile: null,
-  imagePreview: "",
-  existingImageUrl: "",
+
+  imageFiles: [],
+  imagePreviews: [],
+  existingImages: [],
 };
 
 // ============================================================
@@ -114,6 +113,42 @@ const formatPrice = (price) => {
 };
 
 // ============================================================
+// GET ALL PRODUCT IMAGES
+// ============================================================
+
+const getProductImages = (product) => {
+  const images = [
+    product?.image_url,
+
+    ...(Array.isArray(product?.images)
+      ? product.images
+      : []),
+
+    ...(Array.isArray(product?.image_urls)
+      ? product.image_urls
+      : []),
+  ];
+
+  return images.filter(
+    (image, index, array) =>
+      typeof image === "string" &&
+      image.trim() &&
+      array.indexOf(image) === index
+  );
+};
+
+// ============================================================
+// CHECK SUPABASE STORAGE IMAGE
+// ============================================================
+
+const isStorageImage = (imageUrl) => {
+  return (
+    typeof imageUrl === "string" &&
+    imageUrl.includes(STORAGE_MARKER)
+  );
+};
+
+// ============================================================
 // ADMIN PRODUCTS
 // ============================================================
 
@@ -124,23 +159,18 @@ const AdminProducts = () => {
 
   const [products, setProducts] = useState([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [showForm, setShowForm] =
-    useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   const [editingProduct, setEditingProduct] =
     useState(null);
 
-  const [form, setForm] =
-    useState(EMPTY_FORM);
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [deletingId, setDeletingId] =
     useState(null);
@@ -151,8 +181,7 @@ const AdminProducts = () => {
   const [successMessage, setSuccessMessage] =
     useState("");
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
   const [categoryFilter, setCategoryFilter] =
     useState("All");
@@ -162,6 +191,9 @@ const AdminProducts = () => {
 
   const [mobileSidebar, setMobileSidebar] =
     useState(false);
+
+  const [previewImageIndex, setPreviewImageIndex] =
+    useState(0);
 
   // ==========================================================
   // FETCH PRODUCTS
@@ -220,7 +252,7 @@ const AdminProducts = () => {
   }, [fetchProducts]);
 
   // ==========================================================
-  // AUTO HIDE MESSAGES
+  // AUTO HIDE SUCCESS
   // ==========================================================
 
   useEffect(() => {
@@ -302,6 +334,34 @@ const AdminProducts = () => {
   };
 
   // ==========================================================
+  // CLEANUP PREVIEW URLS
+  // ==========================================================
+
+  const cleanupPreviewUrls = (urls = []) => {
+    urls.forEach((url) => {
+      if (
+        typeof url === "string" &&
+        url.startsWith("blob:")
+      ) {
+        URL.revokeObjectURL(url);
+      }
+    });
+  };
+
+  // ==========================================================
+  // RESET FORM
+  // ==========================================================
+
+  const resetForm = () => {
+    setForm({
+      ...EMPTY_FORM,
+      imageFiles: [],
+      imagePreviews: [],
+      existingImages: [],
+    });
+  };
+
+  // ==========================================================
   // OPEN ADD FORM
   // ==========================================================
 
@@ -310,13 +370,15 @@ const AdminProducts = () => {
 
     setForm({
       ...EMPTY_FORM,
+      imageFiles: [],
+      imagePreviews: [],
+      existingImages: [],
     });
 
     setErrorMessage("");
     setSuccessMessage("");
 
     setShowForm(true);
-
     setMobileSidebar(false);
   };
 
@@ -325,36 +387,51 @@ const AdminProducts = () => {
   // ==========================================================
 
   const openEditForm = (product) => {
+    const existingImages =
+      getProductImages(product);
+
     setEditingProduct(product);
 
     setForm({
       title: product.title || "",
+
       description:
         product.description || "",
+
+      // IMPORTANT:
+      // Every product gets its own delivery text.
+      delivery:
+        product.delivery &&
+        product.delivery.trim()
+          ? product.delivery
+          : DEFAULT_DELIVERY,
+
       price:
         product.price !== null &&
         product.price !== undefined
           ? product.price
           : "",
+
       category:
         product.category ||
         "Dining Table",
+
       status:
-        product.status || "active",
+        product.status ||
+        "active",
+
       featured:
         product.featured === true,
-      imageFile: null,
-      imagePreview:
-        product.image_url || "",
-      existingImageUrl:
-        product.image_url || "",
+
+      imageFiles: [],
+      imagePreviews: [],
+      existingImages,
     });
 
     setErrorMessage("");
     setSuccessMessage("");
 
     setShowForm(true);
-
     setMobileSidebar(false);
   };
 
@@ -367,11 +444,14 @@ const AdminProducts = () => {
       return;
     }
 
+    cleanupPreviewUrls(
+      form.imagePreviews
+    );
+
     setShowForm(false);
     setEditingProduct(null);
-    setForm({
-      ...EMPTY_FORM,
-    });
+
+    resetForm();
   };
 
   // ==========================================================
@@ -395,45 +475,164 @@ const AdminProducts = () => {
   const handleImageChange = (
     event
   ) => {
-    const file =
-      event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (!file.type.startsWith("image/")) {
-      setErrorMessage(
-        "Please select a valid image file."
+    const selectedFiles =
+      Array.from(
+        event.target.files || []
       );
 
-      event.target.value = "";
+    event.target.value = "";
+
+    if (!selectedFiles.length) {
       return;
     }
 
-    if (file.size > MAX_IMAGE_SIZE) {
+    const validFiles = [];
+    const rejectedFiles = [];
+
+    for (const file of selectedFiles) {
+      // ------------------------------------------------------
+      // INVALID TYPE
+      // ------------------------------------------------------
+
+      if (
+        !file.type.startsWith(
+          "image/"
+        )
+      ) {
+        rejectedFiles.push(
+          `"${file.name}" is not a valid image file.`
+        );
+
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // FILE SIZE
+      // ------------------------------------------------------
+
+      if (
+        file.size >
+        MAX_IMAGE_SIZE
+      ) {
+        const fileSizeMB = (
+          file.size /
+          (1024 * 1024)
+        ).toFixed(2);
+
+        rejectedFiles.push(
+          `"${file.name}" is ${fileSizeMB}MB. Maximum allowed size is ${MAX_IMAGE_SIZE_MB}MB per image.`
+        );
+
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    // --------------------------------------------------------
+    // ERROR
+    // --------------------------------------------------------
+
+    if (rejectedFiles.length > 0) {
       setErrorMessage(
-        "Image size must be less than 5MB."
+        rejectedFiles.length === 1
+          ? rejectedFiles[0]
+          : `${rejectedFiles.length} images could not be added. ${rejectedFiles.join(
+              " "
+            )}`
       );
+    } else {
+      setErrorMessage("");
+    }
 
-      event.target.value = "";
+    // --------------------------------------------------------
+    // ADD VALID FILES
+    // --------------------------------------------------------
+
+    if (!validFiles.length) {
       return;
     }
 
-    const previewUrl =
-      URL.createObjectURL(file);
+    const newPreviewUrls =
+      validFiles.map((file) =>
+        URL.createObjectURL(file)
+      );
 
     setForm((previous) => ({
       ...previous,
-      imageFile: file,
-      imagePreview: previewUrl,
+
+      imageFiles: [
+        ...previous.imageFiles,
+        ...validFiles,
+      ],
+
+      imagePreviews: [
+        ...previous.imagePreviews,
+        ...newPreviewUrls,
+      ],
+    }));
+  };
+
+  // ==========================================================
+  // REMOVE NEW IMAGE
+  // ==========================================================
+
+  const removeNewImage = (
+    index
+  ) => {
+    setForm((previous) => {
+      const preview =
+        previous.imagePreviews[index];
+
+      if (
+        preview &&
+        preview.startsWith("blob:")
+      ) {
+        URL.revokeObjectURL(
+          preview
+        );
+      }
+
+      return {
+        ...previous,
+
+        imageFiles:
+          previous.imageFiles.filter(
+            (_, imageIndex) =>
+              imageIndex !== index
+          ),
+
+        imagePreviews:
+          previous.imagePreviews.filter(
+            (_, imageIndex) =>
+              imageIndex !== index
+          ),
+      };
+    });
+  };
+
+  // ==========================================================
+  // REMOVE EXISTING IMAGE
+  // ==========================================================
+
+  const removeExistingImage = (
+    index
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+
+      existingImages:
+        previous.existingImages.filter(
+          (_, imageIndex) =>
+            imageIndex !== index
+        ),
     }));
 
     setErrorMessage("");
   };
 
   // ==========================================================
-  // VALIDATION
+  // VALIDATE FORM
   // ==========================================================
 
   const validateForm = () => {
@@ -461,18 +660,46 @@ const AdminProducts = () => {
       }
     }
 
-    if (
-      !editingProduct &&
-      !form.imageFile
-    ) {
-      return "Please select a product image.";
+    const totalImages =
+      form.existingImages.length +
+      form.imageFiles.length;
+
+    if (totalImages === 0) {
+      return "Please add at least one product image.";
     }
 
     return "";
   };
 
   // ==========================================================
-  // UPLOAD IMAGE
+  // FRIENDLY UPLOAD ERROR
+  // ==========================================================
+
+  const getFriendlyUploadError = (
+    error
+  ) => {
+    const message =
+      error?.message?.toLowerCase() ||
+      "";
+
+    if (
+      message.includes("size") ||
+      message.includes("payload") ||
+      message.includes("too large") ||
+      message.includes("413") ||
+      message.includes("maximum")
+    ) {
+      return `Image upload failed because the file is too large. Maximum allowed size is ${MAX_IMAGE_SIZE_MB}MB per image.`;
+    }
+
+    return (
+      error?.message ||
+      "Unable to upload product image."
+    );
+  };
+
+  // ==========================================================
+  // UPLOAD SINGLE IMAGE
   // ==========================================================
 
   const uploadImage = async (
@@ -480,6 +707,12 @@ const AdminProducts = () => {
   ) => {
     if (!file) {
       return null;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      throw new Error(
+        `"${file.name}" is too large. Maximum allowed size is ${MAX_IMAGE_SIZE_MB}MB per image.`
+      );
     }
 
     const extension =
@@ -526,7 +759,47 @@ const AdminProducts = () => {
           storagePath
         );
 
-    return publicData?.publicUrl || null;
+    return (
+      publicData?.publicUrl ||
+      null
+    );
+  };
+
+  // ==========================================================
+  // UPLOAD MULTIPLE IMAGES
+  // ==========================================================
+
+  const uploadImages = async (
+    files
+  ) => {
+    if (!files?.length) {
+      return [];
+    }
+
+    const uploadedUrls = [];
+
+    try {
+      for (const file of files) {
+        const imageUrl =
+          await uploadImage(file);
+
+        if (imageUrl) {
+          uploadedUrls.push(
+            imageUrl
+          );
+        }
+      }
+
+      return uploadedUrls;
+    } catch (error) {
+      for (const imageUrl of uploadedUrls) {
+        await deleteStorageImage(
+          imageUrl
+        );
+      }
+
+      throw error;
+    }
   };
 
   // ==========================================================
@@ -540,8 +813,8 @@ const AdminProducts = () => {
       }
 
       if (
-        !imageUrl.includes(
-          STORAGE_MARKER
+        !isStorageImage(
+          imageUrl
         )
       ) {
         return;
@@ -573,6 +846,25 @@ const AdminProducts = () => {
     };
 
   // ==========================================================
+  // DELETE MULTIPLE STORAGE IMAGES
+  // ==========================================================
+
+  const deleteStorageImages =
+    async (imageUrls = []) => {
+      const uniqueImages = [
+        ...new Set(
+          imageUrls.filter(Boolean)
+        ),
+      ];
+
+      for (const imageUrl of uniqueImages) {
+        await deleteStorageImage(
+          imageUrl
+        );
+      }
+    };
+
+  // ==========================================================
   // SAVE PRODUCT
   // ==========================================================
 
@@ -594,33 +886,68 @@ const AdminProducts = () => {
         setErrorMessage(
           validationError
         );
+
         return;
       }
 
       setSaving(true);
 
-      let newImageUrl = null;
+      let newlyUploadedImages = [];
 
       try {
         // ----------------------------------------------------
-        // UPLOAD NEW IMAGE
+        // UPLOAD NEW IMAGES
         // ----------------------------------------------------
 
-        if (form.imageFile) {
-          newImageUrl =
-            await uploadImage(
-              form.imageFile
-            );
+        newlyUploadedImages =
+          await uploadImages(
+            form.imageFiles
+          );
+
+        // ----------------------------------------------------
+        // FINAL IMAGE ARRAY
+        // ----------------------------------------------------
+
+        const finalImages = [
+          ...form.existingImages,
+          ...newlyUploadedImages,
+        ].filter(
+          (image, index, array) =>
+            typeof image === "string" &&
+            image.trim() &&
+            array.indexOf(image) ===
+              index
+        );
+
+        if (!finalImages.length) {
+          throw new Error(
+            "At least one product image is required."
+          );
         }
+
+        // ----------------------------------------------------
+        // PRIMARY IMAGE
+        // ----------------------------------------------------
+
+        const primaryImage =
+          finalImages[0] || null;
+
+        // ----------------------------------------------------
+        // DELIVERY VALUE
+        //
+        // Every product gets its own delivery text.
+        // If empty, use default.
+        // ----------------------------------------------------
+
+        const deliveryValue =
+          form.delivery?.trim() ||
+          DEFAULT_DELIVERY;
 
         // ----------------------------------------------------
         // ADD PRODUCT
         // ----------------------------------------------------
 
         if (!editingProduct) {
-          const imageUrl =
-            newImageUrl;
-
           const {
             error,
           } = await supabase
@@ -633,6 +960,9 @@ const AdminProducts = () => {
                 description:
                   form.description.trim(),
 
+                delivery:
+                  deliveryValue,
+
                 price:
                   form.price === ""
                     ? null
@@ -644,7 +974,10 @@ const AdminProducts = () => {
                   form.category,
 
                 image_url:
-                  imageUrl,
+                  primaryImage,
+
+                images:
+                  finalImages,
 
                 status:
                   form.status,
@@ -658,17 +991,15 @@ const AdminProducts = () => {
             ]);
 
           if (error) {
-            if (newImageUrl) {
-              await deleteStorageImage(
-                newImageUrl
-              );
-            }
+            await deleteStorageImages(
+              newlyUploadedImages
+            );
 
             throw error;
           }
 
           setSuccessMessage(
-            "Product added successfully."
+            "Product added successfully with delivery information."
           );
         }
 
@@ -677,14 +1008,18 @@ const AdminProducts = () => {
         // ----------------------------------------------------
 
         else {
-          const oldImageUrl =
-            editingProduct.image_url ||
-            "";
+          const oldImages =
+            getProductImages(
+              editingProduct
+            );
 
-          const finalImageUrl =
-            newImageUrl ||
-            oldImageUrl ||
-            null;
+          const removedImages =
+            oldImages.filter(
+              (oldImage) =>
+                !form.existingImages.includes(
+                  oldImage
+                )
+            );
 
           const {
             error,
@@ -697,6 +1032,9 @@ const AdminProducts = () => {
               description:
                 form.description.trim(),
 
+              delivery:
+                deliveryValue,
+
               price:
                 form.price === ""
                   ? null
@@ -708,7 +1046,10 @@ const AdminProducts = () => {
                 form.category,
 
               image_url:
-                finalImageUrl,
+                primaryImage,
+
+              images:
+                finalImages,
 
               status:
                 form.status,
@@ -725,25 +1066,22 @@ const AdminProducts = () => {
             );
 
           if (error) {
-            if (newImageUrl) {
-              await deleteStorageImage(
-                newImageUrl
-              );
-            }
+            await deleteStorageImages(
+              newlyUploadedImages
+            );
 
             throw error;
           }
 
-          // Delete old image only
-          // after successful DB update.
+          // --------------------------------------------------
+          // DELETE REMOVED OLD IMAGES
+          // --------------------------------------------------
+
           if (
-            newImageUrl &&
-            oldImageUrl &&
-            oldImageUrl !==
-              newImageUrl
+            removedImages.length
           ) {
-            await deleteStorageImage(
-              oldImageUrl
+            await deleteStorageImages(
+              removedImages
             );
           }
 
@@ -752,14 +1090,24 @@ const AdminProducts = () => {
           );
         }
 
+        // ----------------------------------------------------
+        // REFRESH PRODUCTS
+        // ----------------------------------------------------
+
         await fetchProducts(true);
+
+        // ----------------------------------------------------
+        // CLEANUP
+        // ----------------------------------------------------
+
+        cleanupPreviewUrls(
+          form.imagePreviews
+        );
 
         setShowForm(false);
         setEditingProduct(null);
 
-        setForm({
-          ...EMPTY_FORM,
-        });
+        resetForm();
       } catch (error) {
         console.error(
           "Save product error:",
@@ -767,8 +1115,9 @@ const AdminProducts = () => {
         );
 
         setErrorMessage(
-          error?.message ||
-            "Unable to save product."
+          getFriendlyUploadError(
+            error
+          )
         );
       } finally {
         setSaving(false);
@@ -787,7 +1136,7 @@ const AdminProducts = () => {
 
       const confirmed =
         window.confirm(
-          `Delete "${product.title}"?\n\nThis action cannot be undone.`
+          `Delete "${product.title}"?\n\nAll product images will also be deleted from storage.\n\nThis action cannot be undone.`
         );
 
       if (!confirmed) {
@@ -795,10 +1144,17 @@ const AdminProducts = () => {
       }
 
       try {
-        setDeletingId(product.id);
+        setDeletingId(
+          product.id
+        );
 
         setErrorMessage("");
         setSuccessMessage("");
+
+        const productImages =
+          getProductImages(
+            product
+          );
 
         const {
           error,
@@ -814,9 +1170,9 @@ const AdminProducts = () => {
           throw error;
         }
 
-        if (product.image_url) {
-          await deleteStorageImage(
-            product.image_url
+        if (productImages.length) {
+          await deleteStorageImages(
+            productImages
           );
         }
 
@@ -830,7 +1186,7 @@ const AdminProducts = () => {
         );
 
         setSuccessMessage(
-          "Product deleted successfully."
+          "Product and all its images deleted successfully."
         );
       } catch (error) {
         console.error(
@@ -873,6 +1229,11 @@ const AdminProducts = () => {
                 searchValue
               ) ||
             product.description
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            product.delivery
               ?.toLowerCase()
               .includes(
                 searchValue
@@ -936,6 +1297,64 @@ const AdminProducts = () => {
   }, [products]);
 
   // ==========================================================
+  // PREVIEW MODAL
+  // ==========================================================
+
+  const openPreview = (
+    product
+  ) => {
+    setPreviewProduct(
+      product
+    );
+
+    setPreviewImageIndex(0);
+  };
+
+  const closePreview = () => {
+    setPreviewProduct(null);
+    setPreviewImageIndex(0);
+  };
+
+  const previewImages =
+    previewProduct
+      ? getProductImages(
+          previewProduct
+        )
+      : [];
+
+  const previousPreviewImage =
+    () => {
+      if (
+        previewImages.length <=
+        1
+      ) {
+        return;
+      }
+
+      setPreviewImageIndex(
+        (current) =>
+          current === 0
+            ? previewImages.length - 1
+            : current - 1
+      );
+    };
+
+  const nextPreviewImage = () => {
+    if (
+      previewImages.length <=
+      1
+    ) {
+      return;
+    }
+
+    setPreviewImageIndex(
+      (current) =>
+        (current + 1) %
+        previewImages.length
+    );
+  };
+
+  // ==========================================================
   // SIDEBAR
   // ==========================================================
 
@@ -945,7 +1364,7 @@ const AdminProducts = () => {
         className={`
           fixed inset-y-0 left-0 z-[70]
           flex w-[250px] flex-col
-          border-r border-slate-200
+          border-r border-white/10
           bg-[#102438]
           text-white
           transition-transform duration-300
@@ -971,10 +1390,11 @@ const AdminProducts = () => {
           </div>
 
           <button
+            type="button"
             onClick={() =>
               setMobileSidebar(false)
             }
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-white/50 transition hover:bg-white/10 hover:text-white lg:hidden"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/10 hover:text-white lg:hidden"
           >
             <X size={17} />
           </button>
@@ -983,7 +1403,6 @@ const AdminProducts = () => {
         {/* NAVIGATION */}
 
         <div className="flex-1 overflow-y-auto px-3 py-6">
-
           {/* OVERVIEW */}
 
           <div className="mb-7">
@@ -999,7 +1418,7 @@ const AdminProducts = () => {
               }
               className={({ isActive }) =>
                 `
-                flex items-center gap-3 rounded-md
+                flex items-center gap-3 rounded-lg
                 px-3 py-2.5 text-[12px]
                 transition
                 ${
@@ -1033,7 +1452,7 @@ const AdminProducts = () => {
               }
               className={({ isActive }) =>
                 `
-                flex items-center gap-3 rounded-md
+                flex items-center gap-3 rounded-lg
                 px-3 py-2.5 text-[12px]
                 transition
                 ${
@@ -1067,7 +1486,7 @@ const AdminProducts = () => {
               onClick={() =>
                 setMobileSidebar(false)
               }
-              className="flex items-center gap-3 rounded-md px-3 py-2.5 text-[12px] font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[12px] font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white"
             >
               <ExternalLink
                 size={16}
@@ -1082,8 +1501,7 @@ const AdminProducts = () => {
         {/* BOTTOM */}
 
         <div className="border-t border-white/10 p-3">
-
-          <div className="mb-2 px-3 py-3">
+          <div className="mb-2 rounded-lg px-3 py-3">
             <p className="text-[10px] font-semibold text-white/50">
               Store Status
             </p>
@@ -1098,8 +1516,11 @@ const AdminProducts = () => {
           </div>
 
           <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-[12px] font-medium text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+            type="button"
+            onClick={
+              handleLogout
+            }
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[12px] font-medium text-white/50 transition hover:bg-white/[0.06] hover:text-white"
           >
             <LogOut
               size={16}
@@ -1114,43 +1535,30 @@ const AdminProducts = () => {
   };
 
   // ==========================================================
-  // LOADING SCREEN
+  // LOADING
   // ==========================================================
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f5f7f9]">
-
         <div className="flex min-h-screen">
-
-          {/* SIDEBAR */}
-
           <div className="hidden w-[250px] shrink-0 bg-[#102438] lg:block">
-
             <div className="h-[76px] border-b border-white/10 p-5">
-
-              <div className="h-5 w-32 animate-pulse rounded bg-white/10" />
+              <div className="h-5 w-32 animate-pulse rounded-lg bg-white/10" />
 
               <div className="mt-2 h-2 w-20 animate-pulse rounded bg-white/5" />
-
             </div>
-
           </div>
 
-          {/* CONTENT */}
-
           <div className="flex-1">
-
             <div className="h-[70px] border-b border-slate-200 bg-white" />
 
             <main className="p-5 sm:p-7 lg:p-8">
-
-              <div className="h-7 w-48 animate-pulse rounded bg-slate-200" />
+              <div className="h-7 w-48 animate-pulse rounded-lg bg-slate-200" />
 
               <div className="mt-3 h-3 w-72 animate-pulse rounded bg-slate-100" />
 
-              <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 lg:grid-cols-4">
-
+              <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 lg:grid-cols-4">
                 {Array.from({
                   length: 4,
                 }).map(
@@ -1161,18 +1569,16 @@ const AdminProducts = () => {
                     />
                   )
                 )}
-
               </div>
 
               <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-
                 {Array.from({
                   length: 8,
                 }).map(
                   (_, index) => (
                     <div
                       key={index}
-                      className="overflow-hidden border border-slate-200 bg-white"
+                      className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                     >
                       <div className="aspect-[4/3] animate-pulse bg-slate-100" />
 
@@ -1186,9 +1592,7 @@ const AdminProducts = () => {
                     </div>
                   )
                 )}
-
               </div>
-
             </main>
           </div>
         </div>
@@ -1202,16 +1606,9 @@ const AdminProducts = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f7f9] text-[#14283D]">
-
-      {/* ====================================================
-          SIDEBAR
-      ==================================================== */}
-
       <Sidebar />
 
-      {/* ====================================================
-          MOBILE SIDEBAR OVERLAY
-      ==================================================== */}
+      {/* MOBILE OVERLAY */}
 
       {mobileSidebar && (
         <button
@@ -1224,36 +1621,25 @@ const AdminProducts = () => {
         />
       )}
 
-      {/* ====================================================
-          MAIN AREA
-      ==================================================== */}
+      {/* MAIN */}
 
       <div className="min-h-screen lg:pl-[250px]">
-
-        {/* ==================================================
-            TOP BAR
-        ================================================== */}
+        {/* TOP BAR */}
 
         <header className="sticky top-0 z-50 h-[70px] border-b border-slate-200 bg-white">
-
           <div className="flex h-full items-center justify-between px-4 sm:px-6 lg:px-8">
-
-            {/* LEFT */}
-
             <div className="flex min-w-0 items-center gap-3">
-
               <button
                 type="button"
                 onClick={() =>
                   setMobileSidebar(true)
                 }
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] lg:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] lg:hidden"
               >
                 <Menu size={18} />
               </button>
 
               <div className="min-w-0">
-
                 <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
                   Admin Panel
                 </p>
@@ -1261,21 +1647,17 @@ const AdminProducts = () => {
                 <h2 className="mt-0.5 truncate text-sm font-bold text-[#14283D]">
                   Products
                 </h2>
-
               </div>
             </div>
 
-            {/* RIGHT */}
-
             <div className="flex shrink-0 items-center gap-2">
-
               <button
                 type="button"
                 onClick={() =>
                   fetchProducts(true)
                 }
                 disabled={refreshing}
-                className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
                   size={13}
@@ -1295,7 +1677,7 @@ const AdminProducts = () => {
                 href="/"
                 target="_blank"
                 rel="noreferrer"
-                className="hidden h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] sm:flex"
+                className="hidden h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] sm:flex"
               >
                 <ExternalLink
                   size={13}
@@ -1306,8 +1688,10 @@ const AdminProducts = () => {
 
               <button
                 type="button"
-                onClick={openAddForm}
-                className="flex h-9 items-center gap-2 rounded-md bg-[#0789A6] px-3.5 text-[11px] font-semibold text-white transition hover:bg-[#067d96]"
+                onClick={
+                  openAddForm
+                }
+                className="flex h-9 items-center gap-2 rounded-lg bg-[#0789A6] px-3.5 text-[11px] font-semibold text-white transition hover:bg-[#067d96]"
               >
                 <Plus size={14} />
 
@@ -1315,31 +1699,22 @@ const AdminProducts = () => {
                   Add Product
                 </span>
               </button>
-
             </div>
           </div>
         </header>
 
-        {/* ==================================================
-            CONTENT
-        ================================================== */}
+        {/* CONTENT */}
 
         <main className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-
-          {/* =================================================
-              PAGE HEADER
-          ================================================= */}
+          {/* PAGE HEADER */}
 
           <section className="mb-7">
-
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#0789A6]">
               Catalog
             </p>
 
             <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-
               <div className="min-w-0">
-
                 <h1 className="text-2xl font-bold tracking-tight text-[#14283D] sm:text-3xl">
                   Product Management
                 </h1>
@@ -1347,13 +1722,10 @@ const AdminProducts = () => {
                 <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">
                   Add, edit and manage products displayed on your AR Woodworks website.
                 </p>
-
               </div>
 
               <div className="flex items-center gap-2">
-
-                <div className="flex h-8 items-center gap-2 border border-slate-200 bg-white px-3">
-
+                <div className="flex h-8 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
                   <Boxes
                     size={13}
                     className="text-[#0789A6]"
@@ -1362,30 +1734,22 @@ const AdminProducts = () => {
                   <span className="text-[10px] font-semibold text-slate-500">
                     {products.length} Products
                   </span>
-
                 </div>
-
               </div>
-
             </div>
           </section>
 
-          {/* =================================================
-              SUCCESS MESSAGE
-          ================================================= */}
+          {/* SUCCESS */}
 
           {successMessage && (
-            <div className="mb-5 border border-emerald-200 bg-emerald-50">
-
+            <div className="mb-5 overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50">
               <div className="flex items-start gap-3 px-4 py-3">
-
                 <CheckCircle2
                   size={16}
                   className="mt-0.5 shrink-0 text-emerald-600"
                 />
 
-                <div className="min-w-0">
-
+                <div>
                   <p className="text-xs font-bold text-emerald-700">
                     Success
                   </p>
@@ -1393,29 +1757,24 @@ const AdminProducts = () => {
                   <p className="mt-0.5 text-[11px] leading-5 text-emerald-600">
                     {successMessage}
                   </p>
-
                 </div>
-
               </div>
             </div>
           )}
 
-          {/* =================================================
-              ERROR MESSAGE
-          ================================================= */}
+          {/* ERROR */}
 
           {errorMessage && (
-            <div className="mb-5 border border-red-200 bg-red-50">
-
+            <div className="mb-5 overflow-hidden rounded-xl border border-red-200 bg-red-50">
               <div className="flex items-start gap-3 px-4 py-3">
-
-                <AlertCircle
-                  size={16}
-                  className="mt-0.5 shrink-0 text-red-600"
-                />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
+                  <AlertCircle
+                    size={16}
+                    className="text-red-600"
+                  />
+                </div>
 
                 <div className="min-w-0">
-
                   <p className="text-xs font-bold text-red-700">
                     Something went wrong
                   </p>
@@ -1424,29 +1783,26 @@ const AdminProducts = () => {
                     {errorMessage}
                   </p>
 
+                  <p className="mt-1.5 text-[9px] font-semibold text-red-500">
+                    Maximum image size:{" "}
+                    {MAX_IMAGE_SIZE_MB}MB
+                    per image.
+                  </p>
                 </div>
-
               </div>
             </div>
           )}
 
-          {/* =================================================
-              STATISTICS
-          ================================================= */}
+          {/* STATISTICS */}
 
-          <section className="grid grid-cols-2 border border-slate-200 bg-white lg:grid-cols-4">
-
-            {/* TOTAL */}
-
+          <section className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white lg:grid-cols-4">
             <div className="border-b border-r border-slate-200 p-4 sm:p-5 lg:border-b-0">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 Total Products
               </p>
 
-              <div className="mt-3 flex items-end justify-between gap-2">
-
-                <p className="text-2xl font-bold tracking-tight text-[#14283D] sm:text-3xl">
+              <div className="mt-3 flex items-end justify-between">
+                <p className="text-2xl font-bold text-[#14283D] sm:text-3xl">
                   {stats.total}
                 </p>
 
@@ -1454,70 +1810,49 @@ const AdminProducts = () => {
                   size={15}
                   className="mb-1 text-slate-300"
                 />
-
               </div>
-
             </div>
 
-            {/* ACTIVE */}
-
             <div className="border-b border-slate-200 p-4 sm:p-5 lg:border-b-0 lg:border-r">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 Active Products
               </p>
 
-              <div className="mt-3 flex items-end justify-between gap-2">
-
-                <p className="text-2xl font-bold tracking-tight text-[#14283D] sm:text-3xl">
+              <div className="mt-3 flex items-end justify-between">
+                <p className="text-2xl font-bold text-[#14283D] sm:text-3xl">
                   {stats.active}
                 </p>
 
                 <span className="mb-1 flex items-center gap-1.5 text-[9px] font-semibold text-emerald-600">
-
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-
                   Live
-
                 </span>
-
               </div>
-
             </div>
 
-            {/* CATEGORIES */}
-
             <div className="border-r border-slate-200 p-4 sm:p-5">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 Categories
               </p>
 
-              <div className="mt-3 flex items-end justify-between gap-2">
-
-                <p className="text-2xl font-bold tracking-tight text-[#14283D] sm:text-3xl">
+              <div className="mt-3 flex items-end justify-between">
+                <p className="text-2xl font-bold text-[#14283D] sm:text-3xl">
                   {stats.categories}
                 </p>
 
                 <span className="mb-1 text-[9px] font-medium text-slate-400">
                   Groups
                 </span>
-
               </div>
-
             </div>
 
-            {/* FEATURED */}
-
             <div className="p-4 sm:p-5">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 Featured
               </p>
 
-              <div className="mt-3 flex items-end justify-between gap-2">
-
-                <p className="text-2xl font-bold tracking-tight text-[#14283D] sm:text-3xl">
+              <div className="mt-3 flex items-end justify-between">
+                <p className="text-2xl font-bold text-[#14283D] sm:text-3xl">
                   {stats.featured}
                 </p>
 
@@ -1525,25 +1860,15 @@ const AdminProducts = () => {
                   size={15}
                   className="mb-1 text-slate-300"
                 />
-
               </div>
-
             </div>
-
           </section>
 
-          {/* =================================================
-              FILTER PANEL
-          ================================================= */}
+          {/* FILTER */}
 
-          <section className="mt-6 border border-slate-200 bg-white">
-
+          <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-
-              {/* SEARCH */}
-
               <div className="relative w-full lg:max-w-[430px]">
-
                 <Search
                   size={15}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1558,17 +1883,12 @@ const AdminProducts = () => {
                     )
                   }
                   placeholder="Search products..."
-                  className="h-10 w-full border border-slate-200 bg-slate-50/50 pl-9 pr-3 text-[11px] font-medium text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6] focus:bg-white"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-9 pr-3 text-[11px] font-medium text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6] focus:bg-white"
                 />
-
               </div>
 
-              {/* FILTER */}
-
               <div className="flex flex-col gap-3 sm:flex-row">
-
                 <div className="relative min-w-0 sm:min-w-[210px]">
-
                   <Filter
                     size={13}
                     className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1583,7 +1903,7 @@ const AdminProducts = () => {
                         event.target.value
                       )
                     }
-                    className="h-10 w-full appearance-none border border-slate-200 bg-white pl-9 pr-9 text-[11px] font-semibold text-slate-600 outline-none transition focus:border-[#0789A6]"
+                    className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-9 text-[11px] font-semibold text-slate-600 outline-none focus:border-[#0789A6]"
                   >
                     <option value="All">
                       All Categories
@@ -1609,37 +1929,28 @@ const AdminProducts = () => {
                     size={13}
                     className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
-
                 </div>
 
-                <div className="flex h-10 items-center justify-between border border-slate-200 bg-slate-50 px-3 sm:min-w-[145px]">
-
+                <div className="flex h-10 items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 sm:min-w-[145px]">
                   <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">
                     Results
                   </span>
 
                   <span className="text-xs font-bold text-[#14283D]">
-                    {filteredProducts.length}
+                    {
+                      filteredProducts.length
+                    }
                   </span>
-
                 </div>
-
               </div>
-
             </div>
-
           </section>
 
-          {/* =================================================
-              PRODUCT COLLECTION HEADER
-          ================================================= */}
+          {/* PRODUCT COLLECTION */}
 
           <section className="mt-6">
-
             <div className="mb-4 flex items-center justify-between">
-
               <div>
-
                 <h3 className="text-sm font-bold text-[#14283D]">
                   Product Collection
                 </h3>
@@ -1647,35 +1958,25 @@ const AdminProducts = () => {
                 <p className="mt-1 text-[10px] text-slate-400">
                   Manage your website catalogue.
                 </p>
-
               </div>
 
               <button
                 type="button"
-                onClick={openAddForm}
-                className="flex h-8 items-center gap-1.5 bg-[#0789A6] px-3 text-[10px] font-bold text-white transition hover:bg-[#067d96]"
+                onClick={
+                  openAddForm
+                }
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-[#0789A6] px-3 text-[10px] font-bold text-white transition hover:bg-[#067d96]"
               >
                 <Plus size={13} />
-
                 Add
               </button>
-
             </div>
-
-            {/* =================================================
-                PRODUCT GRID
-            ================================================= */}
 
             {filteredProducts.length ===
             0 ? (
-              <div className="border border-slate-200 bg-white px-5 py-20 text-center">
-
-                <div className="mx-auto flex h-12 w-12 items-center justify-center border border-slate-200 bg-slate-50 text-slate-400">
-
-                  <Package
-                    size={20}
-                  />
-
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white px-5 py-20 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-400">
+                  <Package size={20} />
                 </div>
 
                 <h3 className="mt-4 text-sm font-bold text-[#14283D]">
@@ -1698,238 +1999,264 @@ const AdminProducts = () => {
                       onClick={
                         openAddForm
                       }
-                      className="mt-5 inline-flex h-9 items-center gap-2 bg-[#0789A6] px-4 text-[10px] font-bold text-white transition hover:bg-[#067d96]"
+                      className="mt-5 inline-flex h-9 items-center gap-2 rounded-lg bg-[#0789A6] px-4 text-[10px] font-bold text-white"
                     >
-                      <Plus
-                        size={13}
-                      />
-
+                      <Plus size={13} />
                       Add First Product
                     </button>
                   )}
-
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 min-[430px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-
                 {filteredProducts.map(
-                  (product) => (
-                    <article
-                      key={product.id}
-                      className="group overflow-hidden border border-slate-200 bg-white transition duration-200 hover:border-slate-300 hover:shadow-[0_8px_25px_rgba(20,40,61,0.06)]"
-                    >
+                  (product) => {
+                    const productImages =
+                      getProductImages(
+                        product
+                      );
 
-                      {/* IMAGE */}
+                    return (
+                      <article
+                        key={
+                          product.id
+                        }
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          openPreview(
+                            product
+                          )
+                        }
+                        onKeyDown={(
+                          event
+                        ) => {
+                          if (
+                            event.key ===
+                              "Enter" ||
+                            event.key ===
+                              " "
+                          ) {
+                            event.preventDefault();
 
-                      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                            openPreview(
+                              product
+                            );
+                          }
+                        }}
+                        className="group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white transition duration-200 hover:border-slate-300 hover:shadow-[0_8px_25px_rgba(20,40,61,0.07)] focus:outline-none focus:ring-2 focus:ring-[#0789A6]/20"
+                      >
+                        {/* IMAGE */}
 
-                        {product.image_url ? (
-                          <img
-                            src={
-                              product.image_url
-                            }
-                            alt={
-                              product.title ||
-                              "Product"
-                            }
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full flex-col items-center justify-center text-slate-400">
-
-                            <ImageIcon
-                              size={22}
-                            />
-
-                            <span className="mt-2 text-[9px] font-bold uppercase tracking-wider">
-                              No Image
-                            </span>
-
-                          </div>
-                        )}
-
-                        {/* TOP LEFT */}
-
-                        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-
-                          <span className="bg-white/95 px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#14283D] shadow-sm">
-                            {product.category ||
-                              "Uncategorized"}
-                          </span>
-
-                        </div>
-
-                        {/* TOP RIGHT */}
-
-                        <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
-
-                          <span
-                            className={`
-                              px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] shadow-sm
-                              ${
-                                product.status ===
-                                "active"
-                                  ? "bg-emerald-500 text-white"
-                                  : "bg-red-500 text-white"
+                        <div className="relative aspect-[4/3] overflow-hidden rounded-t-xl bg-slate-100">
+                          {product.image_url ? (
+                            <img
+                              src={
+                                product.image_url
                               }
-                            `}
-                          >
-                            {product.status ===
-                            "active"
-                              ? "Active"
-                              : "Inactive"}
-                          </span>
-
-                          {product.featured && (
-                            <span className="flex items-center gap-1 bg-[#14283D] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-white shadow-sm">
-
-                              <Star
-                                size={9}
-                                fill="currentColor"
+                              alt={
+                                product.title ||
+                                "Product"
+                              }
+                              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center text-slate-400">
+                              <ImageIcon
+                                size={22}
                               />
 
-                              Featured
-
-                            </span>
+                              <span className="mt-2 text-[9px] font-bold uppercase tracking-wider">
+                                No Image
+                              </span>
+                            </div>
                           )}
 
-                        </div>
+                          {/* IMAGE COUNT */}
 
-                        {/* PREVIEW */}
+                          {productImages.length >
+                            1 && (
+                            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg bg-[#14283D]/90 px-2 py-1.5 text-white shadow-sm">
+                              <ImageIcon
+                                size={10}
+                              />
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPreviewProduct(
-                              product
-                            )
-                          }
-                          className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center bg-white/95 text-[#14283D] opacity-0 shadow-sm transition group-hover:opacity-100 hover:bg-[#0789A6] hover:text-white"
-                          aria-label="Preview product"
-                        >
-                          <Eye
-                            size={14}
-                          />
-                        </button>
+                              <span className="text-[8px] font-bold">
+                                {
+                                  productImages.length
+                                }{" "}
+                                Images
+                              </span>
+                            </div>
+                          )}
 
-                      </div>
+                          {/* CATEGORY */}
 
-                      {/* CONTENT */}
-
-                      <div className="p-4">
-
-                        <div className="min-w-0">
-
-                          <h3 className="truncate text-sm font-bold text-[#14283D]">
-                            {product.title ||
-                              "Untitled Product"}
-                          </h3>
-
-                          <p className="mt-1.5 min-h-[32px] text-[10px] leading-4 text-slate-400">
-                            {product.description
-                              ? product.description
-                              : "No product description added yet."}
-                          </p>
-
-                        </div>
-
-                        {/* PRICE */}
-
-                        <div className="mt-4 flex items-end justify-between gap-2">
-
-                          <div>
-
-                            <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Price
-                            </p>
-
-                            <p className="mt-1 text-sm font-bold text-[#14283D]">
-                              {formatPrice(
-                                product.price
-                              ) ||
-                                "Price not set"}
-                            </p>
-
+                          <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                            <span className="rounded-lg bg-white/95 px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#14283D] shadow-sm">
+                              {product.category ||
+                                "Uncategorized"}
+                            </span>
                           </div>
 
-                          <div className="flex items-center gap-1 text-right">
+                          {/* STATUS */}
 
-                            <Truck
-                              size={11}
-                              className="text-[#0789A6]"
-                            />
-
-                            <span className="text-[8px] font-semibold text-slate-400">
-                              Pakistan
+                          <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
+                            <span
+                              className={`
+                                rounded-lg px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] shadow-sm
+                                ${
+                                  product.status ===
+                                  "active"
+                                    ? "bg-emerald-500 text-white"
+                                    : "bg-red-500 text-white"
+                                }
+                              `}
+                            >
+                              {product.status ===
+                              "active"
+                                ? "Active"
+                                : "Inactive"}
                             </span>
 
+                            {product.featured && (
+                              <span className="flex items-center gap-1 rounded-lg bg-[#14283D] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-white shadow-sm">
+                                <Star
+                                  size={9}
+                                  fill="currentColor"
+                                />
+
+                                Featured
+                              </span>
+                            )}
                           </div>
 
+                          {/* PREVIEW */}
+
+                          <button
+                            type="button"
+                            onClick={(
+                              event
+                            ) => {
+                              event.stopPropagation();
+
+                              openPreview(
+                                product
+                              );
+                            }}
+                            className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 text-[#14283D] opacity-0 shadow-sm transition group-hover:opacity-100 hover:bg-[#0789A6] hover:text-white"
+                            aria-label="Preview product"
+                          >
+                            <Eye
+                              size={14}
+                            />
+                          </button>
                         </div>
 
-                        {/* ACTIONS */}
+                        {/* CONTENT */}
 
-                        <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
+                        <div className="p-4">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-sm font-bold text-[#14283D]">
+                              {product.title ||
+                                "Untitled Product"}
+                            </h3>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openEditForm(
-                                product
-                              )
-                            }
-                            className="flex h-8 flex-1 items-center justify-center gap-1.5 border border-slate-200 bg-white text-[9px] font-bold text-slate-600 transition hover:border-[#0789A6] hover:text-[#0789A6]"
-                          >
-                            <Pencil
-                              size={12}
-                            />
+                            <p className="mt-1.5 min-h-[32px] text-[10px] leading-4 text-slate-400">
+                              {product.description ||
+                                "No product description added yet."}
+                            </p>
+                          </div>
 
-                            Edit
-                          </button>
+                          <div className="mt-4 flex items-end justify-between gap-2">
+                            <div>
+                              <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Price
+                              </p>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDeleteProduct(
-                                product
-                              )
-                            }
-                            disabled={
-                              deletingId ===
+                              <p className="mt-1 text-sm font-bold text-[#14283D]">
+                                {formatPrice(
+                                  product.price
+                                ) ||
+                                  "Price not set"}
+                              </p>
+                            </div>
+
+                            <div className="flex max-w-[130px] items-center gap-1 text-right">
+                              <Truck
+                                size={11}
+                                className="shrink-0 text-[#0789A6]"
+                              />
+
+                              <span className="truncate text-[8px] font-semibold text-slate-400">
+                                {product.delivery ||
+                                  DEFAULT_DELIVERY}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* ACTIONS */}
+
+                          <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
+                            <button
+                              type="button"
+                              onClick={(
+                                event
+                              ) => {
+                                event.stopPropagation();
+
+                                openEditForm(
+                                  product
+                                );
+                              }}
+                              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-[9px] font-bold text-slate-600 transition hover:border-[#0789A6] hover:text-[#0789A6]"
+                            >
+                              <Pencil
+                                size={12}
+                              />
+
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(
+                                event
+                              ) => {
+                                event.stopPropagation();
+
+                                handleDeleteProduct(
+                                  product
+                                );
+                              }}
+                              disabled={
+                                deletingId ===
+                                product.id
+                              }
+                              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-100 bg-red-50 text-[9px] font-bold text-red-500 transition hover:border-red-200 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Trash2
+                                size={12}
+                              />
+
+                              {deletingId ===
                               product.id
-                            }
-                            className="flex h-8 flex-1 items-center justify-center gap-1.5 border border-red-100 bg-red-50 text-[9px] font-bold text-red-500 transition hover:border-red-200 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Trash2
-                              size={12}
-                            />
-
-                            {deletingId ===
-                            product.id
-                              ? "Deleting..."
-                              : "Delete"}
-                          </button>
-
+                                ? "Deleting..."
+                                : "Delete"}
+                            </button>
+                          </div>
                         </div>
-
-                      </div>
-                    </article>
-                  )
+                      </article>
+                    );
+                  }
                 )}
-
               </div>
             )}
-
           </section>
 
-          {/* =================================================
-              FOOTER INFO
-          ================================================= */}
+          {/* FOOTER INFO */}
 
-          <section className="mt-6 grid border border-slate-200 bg-white sm:grid-cols-3">
-
+          <section className="mt-6 grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-3">
             <div className="border-b border-slate-200 p-5 sm:border-b-0 sm:border-r">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 Active Products
               </p>
@@ -1941,76 +2268,63 @@ const AdminProducts = () => {
               <p className="mt-1 text-[9px] text-slate-400">
                 Currently visible on website
               </p>
-
             </div>
 
             <div className="border-b border-slate-200 p-5 sm:border-b-0 sm:border-r">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                Delivery
+                Product Delivery
               </p>
 
               <div className="mt-2 flex items-center gap-2">
-
                 <Truck
                   size={14}
                   className="text-[#0789A6]"
                 />
 
                 <p className="text-[10px] font-bold text-[#14283D]">
-                  All Pakistan
+                  Editable Per Product
                 </p>
-
               </div>
 
-              <p className="mt-1 text-[9px] text-slate-400">
-                {DELIVERY_TEXT}
+              <p className="mt-1 text-[9px] leading-4 text-slate-400">
+                Delivery information can be changed while adding or editing a product.
               </p>
-
             </div>
 
             <div className="p-5">
-
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 System
               </p>
 
               <div className="mt-2 flex items-center gap-2">
-
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
 
                 <p className="text-[10px] font-semibold text-emerald-600">
                   Supabase Connected
                 </p>
-
               </div>
 
               <p className="mt-1 text-[9px] text-slate-400">
                 Product data is synced automatically.
               </p>
-
             </div>
-
           </section>
 
           {/* FOOTER */}
 
           <footer className="mt-8 border-t border-slate-200 py-5">
-
             <div className="flex flex-col items-center justify-between gap-2 text-center sm:flex-row sm:text-left">
-
               <p className="text-[9px] font-medium text-slate-400">
-                © {new Date().getFullYear()} AR Woodworks
+                ©{" "}
+                {new Date().getFullYear()}{" "}
+                AR Woodworks
               </p>
 
               <p className="text-[9px] text-slate-400">
                 Product Management
               </p>
-
             </div>
-
           </footer>
-
         </main>
       </div>
 
@@ -2020,24 +2334,20 @@ const AdminProducts = () => {
 
       {previewProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071523]/70 p-3 sm:p-6">
-
           <button
             type="button"
             aria-label="Close preview"
-            onClick={() =>
-              setPreviewProduct(null)
+            onClick={
+              closePreview
             }
             className="absolute inset-0 cursor-default"
           />
 
-          <div className="relative z-10 flex max-h-[92vh] w-full max-w-[900px] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl">
-
+          <div className="relative z-10 flex max-h-[92vh] w-full max-w-[1000px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             {/* HEADER */}
 
             <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-5">
-
               <div className="min-w-0">
-
                 <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#0789A6]">
                   Product Preview
                 </p>
@@ -2046,65 +2356,149 @@ const AdminProducts = () => {
                   {previewProduct.title ||
                     "Untitled Product"}
                 </h3>
-
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  setPreviewProduct(
-                    null
-                  )
+                onClick={
+                  closePreview
                 }
-                className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-[#14283D]"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-[#14283D]"
               >
                 <X size={16} />
               </button>
-
             </div>
 
             {/* BODY */}
 
             <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[1.05fr_0.95fr]">
+              {/* IMAGE GALLERY */}
 
-              {/* IMAGE */}
+              <div className="bg-slate-50 p-4 sm:p-6 lg:p-8">
+                <div className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  {previewImages.length >
+                  0 ? (
+                    <>
+                      <img
+                        src={
+                          previewImages[
+                            previewImageIndex
+                          ]
+                        }
+                        alt={
+                          previewProduct.title ||
+                          "Product"
+                        }
+                        className="h-full w-full object-contain"
+                      />
 
-              <div className="flex min-h-[280px] items-center justify-center bg-slate-50 p-5 sm:p-8 lg:min-h-[500px]">
+                      {previewImages.length >
+                        1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={
+                              previousPreviewImage
+                            }
+                            className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-[#14283D] shadow-lg transition hover:bg-[#0789A6] hover:text-white"
+                            aria-label="Previous image"
+                          >
+                            <ChevronLeft
+                              size={20}
+                            />
+                          </button>
 
-                {previewProduct.image_url ? (
-                  <img
-                    src={
-                      previewProduct.image_url
-                    }
-                    alt={
-                      previewProduct.title ||
-                      "Product"
-                    }
-                    className="max-h-[520px] w-full object-contain"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-slate-400">
+                          <button
+                            type="button"
+                            onClick={
+                              nextPreviewImage
+                            }
+                            className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-[#14283D] shadow-lg transition hover:bg-[#0789A6] hover:text-white"
+                            aria-label="Next image"
+                          >
+                            <ChevronRight
+                              size={20}
+                            />
+                          </button>
 
-                    <ImageIcon
-                      size={35}
-                    />
+                          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-[#14283D]/90 px-3 py-1.5 text-[9px] font-bold text-white">
+                            {previewImageIndex +
+                              1}{" "}
+                            /{" "}
+                            {
+                              previewImages.length
+                            }
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center text-slate-400">
+                      <ImageIcon
+                        size={35}
+                      />
 
-                    <p className="mt-2 text-[10px] font-bold uppercase tracking-wider">
-                      No Image
-                    </p>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-wider">
+                        No Image
+                      </p>
+                    </div>
+                  )}
+                </div>
 
+                {/* THUMBNAILS */}
+
+                {previewImages.length >
+                  1 && (
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                    {previewImages.map(
+                      (
+                        image,
+                        index
+                      ) => (
+                        <button
+                          key={`${image}-${index}`}
+                          type="button"
+                          onClick={() =>
+                            setPreviewImageIndex(
+                              index
+                            )
+                          }
+                          className={`
+                            relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white
+                            ${
+                              previewImageIndex ===
+                              index
+                                ? "border-[#0789A6]"
+                                : "border-slate-200"
+                            }
+                          `}
+                        >
+                          <img
+                            src={image}
+                            alt={`Product thumbnail ${
+                              index + 1
+                            }`}
+                            className="h-full w-full object-cover"
+                          />
+
+                          {index ===
+                            0 && (
+                            <span className="absolute bottom-0 left-0 right-0 bg-[#14283D]/80 py-1 text-[7px] font-bold text-white">
+                              MAIN
+                            </span>
+                          )}
+                        </button>
+                      )
+                    )}
                   </div>
                 )}
-
               </div>
 
               {/* INFO */}
 
               <div className="border-t border-slate-200 p-5 sm:p-7 lg:border-l lg:border-t-0">
-
                 <div className="flex flex-wrap gap-2">
-
-                  <span className="bg-slate-100 px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-slate-600">
+                  <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-slate-600">
                     {previewProduct.category ||
                       "Uncategorized"}
                   </span>
@@ -2113,8 +2507,8 @@ const AdminProducts = () => {
                     className={
                       previewProduct.status ===
                       "active"
-                        ? "bg-emerald-50 px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-emerald-600"
-                        : "bg-red-50 px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-red-500"
+                        ? "rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-emerald-600"
+                        : "rounded-lg bg-red-50 px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-red-500"
                     }
                   >
                     {previewProduct.status ===
@@ -2124,18 +2518,15 @@ const AdminProducts = () => {
                   </span>
 
                   {previewProduct.featured && (
-                    <span className="flex items-center gap-1 bg-[#14283D] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-white">
-
+                    <span className="flex items-center gap-1 rounded-lg bg-[#14283D] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] text-white">
                       <Star
                         size={9}
                         fill="currentColor"
                       />
 
                       Featured
-
                     </span>
                   )}
-
                 </div>
 
                 <h2 className="mt-5 text-xl font-bold tracking-tight text-[#14283D] sm:text-2xl">
@@ -2143,8 +2534,9 @@ const AdminProducts = () => {
                     "Untitled Product"}
                 </h2>
 
-                <div className="mt-5">
+                {/* PRICE */}
 
+                <div className="mt-5">
                   <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
                     Price
                   </p>
@@ -2155,11 +2547,29 @@ const AdminProducts = () => {
                     ) ||
                       "Price not set"}
                   </p>
-
                 </div>
 
-                <div className="mt-6 border-t border-slate-100 pt-5">
+                {/* IMAGE COUNT */}
 
+                <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <ImageIcon
+                    size={14}
+                    className="text-[#0789A6]"
+                  />
+
+                  <p className="text-[10px] font-semibold text-slate-500">
+                    {previewImages.length}{" "}
+                    product{" "}
+                    {previewImages.length ===
+                    1
+                      ? "image"
+                      : "images"}
+                  </p>
+                </div>
+
+                {/* DESCRIPTION */}
+
+                <div className="mt-6 border-t border-slate-100 pt-5">
                   <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
                     Description
                   </p>
@@ -2168,36 +2578,34 @@ const AdminProducts = () => {
                     {previewProduct.description ||
                       "No description has been added for this product."}
                   </p>
-
                 </div>
 
-                <div className="mt-6 border border-slate-200 bg-slate-50 p-4">
+                {/* DELIVERY */}
 
+                <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start gap-3">
-
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-white text-[#0789A6]">
-
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0789A6]">
                       <Truck
                         size={15}
                       />
-
                     </div>
 
-                    <div>
-
+                    <div className="min-w-0">
                       <p className="text-[10px] font-bold text-[#14283D]">
                         Delivery Information
                       </p>
 
-                      <p className="mt-1 text-[10px] leading-5 text-slate-400">
-                        {DELIVERY_TEXT}
+                      <p className="mt-1 whitespace-pre-line break-words text-[10px] leading-5 text-slate-400">
+                        {previewProduct.delivery &&
+                        previewProduct.delivery.trim()
+                          ? previewProduct.delivery
+                          : DEFAULT_DELIVERY}
                       </p>
-
                     </div>
-
                   </div>
-
                 </div>
+
+                {/* EDIT */}
 
                 <button
                   type="button"
@@ -2205,23 +2613,19 @@ const AdminProducts = () => {
                     const product =
                       previewProduct;
 
-                    setPreviewProduct(
-                      null
-                    );
+                    closePreview();
 
                     openEditForm(
                       product
                     );
                   }}
-                  className="mt-5 flex h-10 w-full items-center justify-center gap-2 bg-[#0789A6] text-[10px] font-bold text-white transition hover:bg-[#067d96]"
+                  className="mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#0789A6] text-[10px] font-bold text-white transition hover:bg-[#067d96]"
                 >
                   <Pencil size={13} />
 
                   Edit Product
                 </button>
-
               </div>
-
             </div>
           </div>
         </div>
@@ -2233,24 +2637,20 @@ const AdminProducts = () => {
 
       {showForm && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-[#071523]/70 p-0 sm:items-center sm:p-5">
-
           <button
             type="button"
             aria-label="Close product form"
-            onClick={closeForm}
+            onClick={
+              closeForm
+            }
             className="absolute inset-0 cursor-default"
           />
 
-          <div className="relative z-10 flex max-h-[96vh] w-full max-w-[1050px] flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh]">
-
-            {/* =================================================
-                MODAL HEADER
-            ================================================= */}
+          <div className="relative z-10 flex max-h-[96vh] w-full max-w-[1050px] flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-2xl">
+            {/* HEADER */}
 
             <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6">
-
               <div className="min-w-0">
-
                 <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#0789A6]">
                   Catalog
                 </p>
@@ -2263,26 +2663,24 @@ const AdminProducts = () => {
 
                 <p className="mt-0.5 hidden text-[10px] text-slate-400 sm:block">
                   {editingProduct
-                    ? "Update product information and website content."
-                    : "Create a new product for your website catalogue."}
+                    ? "Update product information and product gallery."
+                    : "Create a new product with multiple images."}
                 </p>
-
               </div>
 
               <button
                 type="button"
-                onClick={closeForm}
+                onClick={
+                  closeForm
+                }
                 disabled={saving}
-                className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50"
               >
                 <X size={16} />
               </button>
-
             </div>
 
-            {/* =================================================
-                FORM BODY
-            ================================================= */}
+            {/* FORM */}
 
             <form
               onSubmit={
@@ -2290,128 +2688,271 @@ const AdminProducts = () => {
               }
               className="min-h-0 flex-1 overflow-y-auto"
             >
-
-              <div className="grid lg:grid-cols-[330px_minmax(0,1fr)]">
-
-                {/* =================================================
-                    IMAGE PANEL
-                ================================================= */}
+              <div className="grid lg:grid-cols-[370px_minmax(0,1fr)]">
+                {/* IMAGE PANEL */}
 
                 <div className="border-b border-slate-200 bg-slate-50/60 p-4 sm:p-6 lg:border-b-0 lg:border-r">
-
                   <div className="mb-3">
-
                     <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                      Product Image
+                      Product Gallery
                     </p>
 
                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                      JPG, PNG or WEBP. Maximum 5MB.
+                      Upload JPG, PNG or WEBP images. Maximum{" "}
+                      <span className="font-bold text-slate-600">
+                        {MAX_IMAGE_SIZE_MB}MB
+                      </span>{" "}
+                      per image.
                     </p>
-
                   </div>
 
-                  <div className="relative aspect-[4/3] overflow-hidden border border-slate-200 bg-white">
+                  {/* EXISTING + NEW IMAGES */}
 
-                    {form.imagePreview ? (
-                      <img
-                        src={
-                          form.imagePreview
+                  {form.existingImages.length +
+                    form.imagePreviews.length >
+                  0 ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+                      {/* EXISTING */}
+
+                      {form.existingImages.map(
+                        (
+                          image,
+                          index
+                        ) => (
+                          <div
+                            key={`existing-${image}-${index}`}
+                            className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white"
+                          >
+                            <img
+                              src={image}
+                              alt={`Product image ${
+                                index + 1
+                              }`}
+                              className="h-full w-full object-cover"
+                            />
+
+                            {index ===
+                              0 && (
+                              <span className="absolute left-2 top-2 rounded-lg bg-[#14283D]/90 px-2 py-1 text-[7px] font-bold uppercase tracking-wider text-white">
+                                Main
+                              </span>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeExistingImage(
+                                  index
+                                )
+                              }
+                              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition hover:bg-red-600"
+                              aria-label={`Remove image ${
+                                index + 1
+                              }`}
+                            >
+                              <X
+                                size={13}
+                              />
+                            </button>
+                          </div>
+                        )
+                      )}
+
+                      {/* NEW */}
+
+                      {form.imagePreviews.map(
+                        (
+                          image,
+                          index
+                        ) => {
+                          const mainIndex =
+                            form.existingImages.length +
+                            index;
+
+                          return (
+                            <div
+                              key={`new-${image}-${index}`}
+                              className="group relative aspect-square overflow-hidden rounded-xl border border-[#0789A6]/40 bg-white"
+                            >
+                              <img
+                                src={image}
+                                alt={`New product image ${
+                                  index + 1
+                                }`}
+                                className="h-full w-full object-cover"
+                              />
+
+                              {mainIndex ===
+                                0 && (
+                                <span className="absolute left-2 top-2 rounded-lg bg-[#14283D]/90 px-2 py-1 text-[7px] font-bold uppercase tracking-wider text-white">
+                                  Main
+                                </span>
+                              )}
+
+                              <span className="absolute bottom-2 left-2 rounded-lg bg-[#0789A6] px-2 py-1 text-[7px] font-bold uppercase tracking-wider text-white">
+                                New
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeNewImage(
+                                    index
+                                  )
+                                }
+                                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition hover:bg-red-600"
+                                aria-label={`Remove new image ${
+                                  index + 1
+                                }`}
+                              >
+                                <X
+                                  size={13}
+                                />
+                              </button>
+                            </div>
+                          );
                         }
-                        alt="Product preview"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center text-slate-300">
+                      )}
 
-                        <ImageIcon
-                          size={32}
+                      {/* ADD MORE */}
+
+                      <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-400 transition hover:border-[#0789A6] hover:text-[#0789A6]">
+                        <Plus
+                          size={22}
                         />
 
-                        <p className="mt-2 text-[9px] font-bold uppercase tracking-wider">
-                          No Image Selected
-                        </p>
+                        <span className="mt-2 text-[8px] font-bold uppercase tracking-wider">
+                          Add More
+                        </span>
 
+                        <span className="mt-1 text-[7px] text-slate-400">
+                          Max {MAX_IMAGE_SIZE_MB}MB
+                        </span>
+
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={
+                            handleImageChange
+                          }
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-400 transition hover:border-[#0789A6] hover:text-[#0789A6]">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+                        <Upload
+                          size={20}
+                        />
                       </div>
-                    )}
 
-                    {form.imagePreview && (
-                      <div className="absolute bottom-3 left-3 bg-[#14283D]/90 px-2.5 py-1.5 text-[8px] font-bold text-white">
-                        Preview
-                      </div>
-                    )}
+                      <p className="mt-3 text-[10px] font-bold text-slate-600">
+                        Upload Product Images
+                      </p>
 
+                      <p className="mt-1 text-center text-[8px] text-slate-400">
+                        Select one or multiple images
+                      </p>
+
+                      <p className="mt-2 text-[8px] font-semibold text-slate-400">
+                        Maximum {MAX_IMAGE_SIZE_MB}MB per image
+                      </p>
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={
+                          handleImageChange
+                        }
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+
+                  {/* ADD MORE BUTTON */}
+
+                  {form.existingImages.length +
+                    form.imagePreviews.length >
+                    0 && (
+                    <label className="mt-3 flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600 transition hover:border-[#0789A6] hover:text-[#0789A6]">
+                      <Upload
+                        size={13}
+                      />
+
+                      Add More Images
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={
+                          handleImageChange
+                        }
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+
+                  {/* IMAGE INFO */}
+
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                        Total Images
+                      </span>
+
+                      <span className="text-sm font-bold text-[#14283D]">
+                        {form.existingImages.length +
+                          form.imagePreviews.length}
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-[9px] leading-4 text-slate-400">
+                      The first image will automatically be used as the main product image.
+                    </p>
                   </div>
 
-                  <label className="mt-3 flex h-10 cursor-pointer items-center justify-center gap-2 border border-slate-200 bg-white text-[10px] font-bold text-slate-600 transition hover:border-[#0789A6] hover:text-[#0789A6]">
+                  {/* DELIVERY INFO */}
 
-                    <Upload
-                      size={13}
-                    />
-
-                    {form.imageFile
-                      ? "Change Image"
-                      : editingProduct
-                      ? "Replace Image"
-                      : "Upload Image"}
-
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={
-                        handleImageChange
-                      }
-                      className="hidden"
-                    />
-
-                  </label>
-
-                  <div className="mt-4 border border-slate-200 bg-white p-4">
-
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                     <div className="flex items-start gap-2.5">
-
                       <Truck
                         size={14}
                         className="mt-0.5 shrink-0 text-[#0789A6]"
                       />
 
                       <div>
-
                         <p className="text-[10px] font-bold text-[#14283D]">
-                          Delivery
+                          Product Delivery
                         </p>
 
                         <p className="mt-1 text-[9px] leading-4 text-slate-400">
-                          {DELIVERY_TEXT}
+                          Delivery information is now editable for every product.
                         </p>
-
                       </div>
-
                     </div>
-
                   </div>
-
                 </div>
 
-                {/* =================================================
-                    FORM FIELDS
-                ================================================= */}
+                {/* FORM FIELDS */}
 
                 <div className="p-4 sm:p-6">
-
                   <div className="grid gap-5 sm:grid-cols-2">
-
                     {/* TITLE */}
 
                     <div className="sm:col-span-2">
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Product Title
                       </label>
 
                       <input
                         type="text"
-                        value={form.title}
+                        value={
+                          form.title
+                        }
                         onChange={(event) =>
                           updateForm(
                             "title",
@@ -2419,21 +2960,18 @@ const AdminProducts = () => {
                           )
                         }
                         placeholder="Enter product title"
-                        className="h-10 w-full border border-slate-200 bg-white px-3 text-xs font-medium text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6]"
+                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6]"
                       />
-
                     </div>
 
                     {/* CATEGORY */}
 
                     <div>
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Category
                       </label>
 
                       <div className="relative">
-
                         <select
                           value={
                             form.category
@@ -2444,7 +2982,7 @@ const AdminProducts = () => {
                               event.target.value
                             )
                           }
-                          className="h-10 w-full appearance-none border border-slate-200 bg-white px-3 pr-9 text-xs font-medium text-[#14283D] outline-none transition focus:border-[#0789A6]"
+                          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs font-medium text-[#14283D] outline-none focus:border-[#0789A6]"
                         >
                           {CATEGORIES.map(
                             (
@@ -2470,15 +3008,12 @@ const AdminProducts = () => {
                           size={13}
                           className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                         />
-
                       </div>
-
                     </div>
 
                     {/* PRICE */}
 
                     <div>
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Price
                       </label>
@@ -2486,7 +3021,9 @@ const AdminProducts = () => {
                       <input
                         type="number"
                         min="0"
-                        value={form.price}
+                        value={
+                          form.price
+                        }
                         onChange={(event) =>
                           updateForm(
                             "price",
@@ -2494,15 +3031,13 @@ const AdminProducts = () => {
                           )
                         }
                         placeholder="e.g. 25000"
-                        className="h-10 w-full border border-slate-200 bg-white px-3 text-xs font-medium text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6]"
+                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-[#14283D] outline-none focus:border-[#0789A6]"
                       />
-
                     </div>
 
                     {/* DESCRIPTION */}
 
                     <div className="sm:col-span-2">
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Product Description
                       </label>
@@ -2519,44 +3054,69 @@ const AdminProducts = () => {
                         }
                         placeholder="Write a short professional description..."
                         rows={5}
-                        className="w-full resize-none border border-slate-200 bg-white px-3 py-3 text-xs font-medium leading-5 text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6]"
+                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs font-medium leading-5 text-[#14283D] outline-none focus:border-[#0789A6]"
                       />
-
                     </div>
 
-                    {/* DELIVERY */}
+                    {/* ==================================================
+                        DELIVERY INFORMATION - EDITABLE
+                    ================================================== */}
 
                     <div className="sm:col-span-2">
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Delivery Information
                       </label>
 
-                      <div className="flex min-h-[42px] items-center gap-3 border border-slate-200 bg-slate-50 px-3">
-
+                      <div className="relative">
                         <Truck
                           size={14}
-                          className="shrink-0 text-[#0789A6]"
+                          className="pointer-events-none absolute left-3 top-3 text-[#0789A6]"
                         />
 
-                        <p className="text-[10px] font-semibold text-slate-500">
-                          {DELIVERY_TEXT}
-                        </p>
-
+                        <textarea
+                          value={
+                            form.delivery
+                          }
+                          onChange={(event) =>
+                            updateForm(
+                              "delivery",
+                              event.target.value
+                            )
+                          }
+                          placeholder="e.g. Delivery all over Pakistan."
+                          rows={3}
+                          className="w-full resize-none rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-xs font-medium leading-5 text-[#14283D] outline-none transition placeholder:text-slate-400 focus:border-[#0789A6]"
+                        />
                       </div>
 
+                      <div className="mt-1.5 flex items-start justify-between gap-3">
+                        <p className="text-[9px] leading-4 text-slate-400">
+                          Write custom delivery information for this product.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateForm(
+                              "delivery",
+                              DEFAULT_DELIVERY
+                            )
+                          }
+                          className="shrink-0 text-[9px] font-bold text-[#0789A6] hover:underline"
+                        >
+                          Use Default
+                        </button>
+                      </div>
                     </div>
 
                     {/* STATUS */}
 
                     <div>
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Status
                       </label>
 
                       <div className="relative">
-
                         <select
                           value={
                             form.status
@@ -2567,7 +3127,7 @@ const AdminProducts = () => {
                               event.target.value
                             )
                           }
-                          className="h-10 w-full appearance-none border border-slate-200 bg-white px-3 pr-9 text-xs font-medium text-[#14283D] outline-none transition focus:border-[#0789A6]"
+                          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs font-medium text-[#14283D] outline-none focus:border-[#0789A6]"
                         >
                           <option value="active">
                             Active
@@ -2582,15 +3142,12 @@ const AdminProducts = () => {
                           size={13}
                           className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                         />
-
                       </div>
-
                     </div>
 
                     {/* FEATURED */}
 
                     <div>
-
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-[0.13em] text-slate-500">
                         Featured Product
                       </label>
@@ -2604,7 +3161,7 @@ const AdminProducts = () => {
                           )
                         }
                         className={`
-                          flex h-10 w-full items-center justify-between border px-3 transition
+                          flex h-10 w-full items-center justify-between rounded-lg border px-3 transition
                           ${
                             form.featured
                               ? "border-[#0789A6] bg-[#0789A6]/5"
@@ -2612,9 +3169,7 @@ const AdminProducts = () => {
                           }
                         `}
                       >
-
                         <span className="flex items-center gap-2">
-
                           <Star
                             size={13}
                             className={
@@ -2640,7 +3195,6 @@ const AdminProducts = () => {
                               ? "Featured"
                               : "Standard"}
                           </span>
-
                         </span>
 
                         <span
@@ -2664,40 +3218,30 @@ const AdminProducts = () => {
                             `}
                           />
                         </span>
-
                       </button>
-
                     </div>
-
                   </div>
-
                 </div>
-
               </div>
 
-              {/* =================================================
-                  FORM FOOTER
-              ================================================= */}
+              {/* FORM FOOTER */}
 
               <div className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-4 sm:px-6">
-
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-
                   <p className="text-[9px] text-slate-400">
                     {editingProduct
-                      ? "Changes will update the existing product."
-                      : "Product will be added to your live catalogue."}
+                      ? "Changes will update the existing product, gallery and delivery information."
+                      : "Product will be added with its own delivery information."}
                   </p>
 
                   <div className="flex w-full gap-2 sm:w-auto">
-
                     <button
                       type="button"
                       onClick={
                         closeForm
                       }
                       disabled={saving}
-                      className="flex h-10 flex-1 items-center justify-center border border-slate-200 px-5 text-[10px] font-bold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50 sm:flex-none"
+                      className="flex h-10 flex-1 items-center justify-center rounded-lg border border-slate-200 px-5 text-[10px] font-bold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50 sm:flex-none"
                     >
                       Cancel
                     </button>
@@ -2705,9 +3249,8 @@ const AdminProducts = () => {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="flex h-10 flex-1 items-center justify-center gap-2 bg-[#0789A6] px-5 text-[10px] font-bold text-white transition hover:bg-[#067d96] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+                      className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#0789A6] px-5 text-[10px] font-bold text-white transition hover:bg-[#067d96] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
                     >
-
                       {saving ? (
                         <>
                           <RefreshCw
@@ -2734,21 +3277,14 @@ const AdminProducts = () => {
                             : "Add Product"}
                         </>
                       )}
-
                     </button>
-
                   </div>
-
                 </div>
-
               </div>
-
             </form>
-
           </div>
         </div>
       )}
-
     </div>
   );
 };

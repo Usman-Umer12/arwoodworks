@@ -37,7 +37,7 @@ const BUSINESS = {
   name: "Ali Raza",
 
   shopAddress:
-    "Shop # R-73, Block 13-D2, Near Ibrar Masjid, Gulshan-e-Iqbal, Karachi, Pakistan.",
+    "Shop # R-73, Block 13-D2, Near Abrar Masjid, Gulshan-e-Iqbal, Karachi, Pakistan.",
 
   factoryAddress:
     "Zeenat Square, FC Area, Liaquatabad No.10, Karachi.",
@@ -56,7 +56,7 @@ const BUSINESS = {
 ========================================================= */
 
 const SHOP_MAP_QUERY =
-  "Shop # R-73, Block 13-D2, Near Ibrar Masjid, Gulshan-e-Iqbal, Karachi, Pakistan";
+  "Shop # R-73, Block 13-D2, Near Abrar Masjid, Gulshan-e-Iqbal, Karachi, Pakistan";
 
 const SHOP_DIRECTIONS_URL =
   "https://www.google.com/maps/dir/?api=1&destination=Shop%20%23%20R-73%2C%20Block%2013-D2%2C%20Near%20Ibrar%20Masjid%2C%20Gulshan-e-Iqbal%2C%20Karachi%2C%20Pakistan";

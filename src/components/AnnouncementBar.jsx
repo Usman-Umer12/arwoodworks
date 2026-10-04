@@ -1,328 +1,249 @@
-import React, { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  Info,
-  Megaphone,
-  X,
-} from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Megaphone } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
 
 /* ============================================================
-   VARIANT STYLES
-============================================================ */
+   ANNOUNCEMENT BAR
+   AR WOODWORKS
 
-const variantStyles = {
-  dark: {
-    wrapper: "bg-[#14283D] text-white",
-    icon: "bg-white/10 text-[#58D5EA]",
-    message: "text-white",
-    button:
-      "bg-[#079FC0] text-white hover:bg-[#087F99]",
-    close:
-      "text-white/60 hover:bg-white/10 hover:text-white",
-    border: "border-white/10",
-  },
-
-  cyan: {
-    wrapper: "bg-[#079FC0] text-white",
-    icon: "bg-white/15 text-white",
-    message: "text-white",
-    button:
-      "bg-white text-[#087F99] hover:bg-slate-50",
-    close:
-      "text-white/70 hover:bg-white/10 hover:text-white",
-    border: "border-white/15",
-  },
-
-  light: {
-    wrapper: "bg-[#F5FBFC] text-[#14283D]",
-    icon:
-      "bg-[#079FC0]/10 text-[#079FC0]",
-    message: "text-[#14283D]",
-    button:
-      "bg-[#14283D] text-white hover:bg-[#079FC0]",
-    close:
-      "text-slate-400 hover:bg-slate-200 hover:text-[#14283D]",
-    border: "border-[#DDEFF3]",
-  },
-};
-
-/* ============================================================
-   ANNOUNCEMENT ICON
-============================================================ */
-
-const AnnouncementIcon = ({ variant }) => {
-  if (variant === "light") {
-    return (
-      <Info
-        size={15}
-        strokeWidth={2.2}
-      />
-    );
-  }
-
-  return (
-    <Megaphone
-      size={15}
-      strokeWidth={2.2}
-    />
-  );
-};
-
-/* ============================================================
-   COMPONENT
+   - Fixed height
+   - Simple & professional
+   - No animations
+   - No progress line
+   - No close / X button
+   - Customer cannot dismiss the bar
+   - Admin controls visibility
+   - Multiple announcements rotate automatically
+   - Navbar dropdown stays ABOVE announcement bar
 ============================================================ */
 
 export default function AnnouncementBar() {
-  const [announcement, setAnnouncement] =
-    useState(null);
+  const [announcements, setAnnouncements] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const [visible, setVisible] =
-    useState(false);
+  const timerRef = useRef(null);
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [dismissed, setDismissed] =
-    useState(false);
-
-  /* ==========================================================
-     FETCH ANNOUNCEMENT
-  ========================================================== */
+  /* ============================================================
+     FETCH ANNOUNCEMENTS
+  ============================================================ */
 
   useEffect(() => {
     let mounted = true;
 
-    const loadAnnouncement = async () => {
+    const fetchAnnouncements = async () => {
+      setLoading(true);
+
       try {
-        const {
-          data,
-          error,
-        } = await supabase
+        const { data, error } = await supabase
           .from("announcement_bar")
-          .select(
-            `
-              id,
-              enabled,
-              message,
-              button_text,
-              button_url,
-              variant,
-              dismissible,
-              updated_at
-            `
-          )
+          .select("*")
           .eq("id", 1)
           .maybeSingle();
 
+        if (error) {
+          throw error;
+        }
+
         if (!mounted) return;
 
-        if (error) {
-          console.error(
-            "AnnouncementBar fetch error:",
-            error
-          );
+        /* ======================================================
+           ADMIN DISABLED
+        ====================================================== */
 
-          setAnnouncement(null);
-          setVisible(false);
+        if (!data || data.enabled !== true) {
+          setAnnouncements([]);
           setLoading(false);
-
           return;
         }
 
-        if (!data) {
-          setAnnouncement(null);
-          setVisible(false);
-          setLoading(false);
+        let items = [];
 
-          return;
+        /* ======================================================
+           MULTIPLE ANNOUNCEMENTS
+        ====================================================== */
+
+        if (Array.isArray(data.announcements)) {
+          items = data.announcements;
         }
 
-        /* ====================================================
-           ENABLED CHECK
-        ==================================================== */
+        /* ======================================================
+           OLD MESSAGE SUPPORT
+        ====================================================== */
 
         if (
-          data.enabled === false ||
-          data.enabled === "false"
+          items.length === 0 &&
+          typeof data.message === "string" &&
+          data.message.trim() !== ""
         ) {
-          setAnnouncement(null);
-          setVisible(false);
-          setLoading(false);
-
-          return;
+          items = [
+            {
+              text: data.message.trim(),
+              enabled: true,
+              order: 1,
+            },
+          ];
         }
 
-        /* ====================================================
-           CLEAN DATA
-        ==================================================== */
+        /* ======================================================
+           ONLY ENABLED ANNOUNCEMENTS
+        ====================================================== */
 
-        const cleanData = {
-          ...data,
+        items = items.filter((item) => {
+          if (typeof item === "string") {
+            return item.trim() !== "";
+          }
 
-          message: String(
-            data.message || ""
-          ).trim(),
+          return (
+            item &&
+            item.enabled !== false &&
+            typeof item.text === "string" &&
+            item.text.trim() !== ""
+          );
+        });
 
-          button_text: String(
-            data.button_text || ""
-          ).trim(),
+        /* ======================================================
+           NORMALIZE
+        ====================================================== */
 
-          button_url: String(
-            data.button_url || ""
-          ).trim(),
+        items = items.map((item, index) => {
+          if (typeof item === "string") {
+            return {
+              text: item.trim(),
+              enabled: true,
+              order: index + 1,
+            };
+          }
 
-          variant:
-            data.variant || "dark",
+          return {
+            ...item,
+            text: item.text.trim(),
+            enabled: item.enabled !== false,
+            order:
+              Number.isFinite(Number(item.order))
+                ? Number(item.order)
+                : index + 1,
+          };
+        });
 
-          dismissible:
-            data.dismissible !== false,
-        };
+        /* ======================================================
+           SORT BY ADMIN ORDER
+        ====================================================== */
 
-        /* ====================================================
-           EMPTY MESSAGE CHECK
-        ==================================================== */
+        items.sort((a, b) => a.order - b.order);
 
-        if (!cleanData.message) {
-          setAnnouncement(null);
-          setVisible(false);
-          setLoading(false);
-
-          return;
+        if (mounted) {
+          setAnnouncements(items);
+          setActiveIndex(0);
         }
-
-        setAnnouncement(cleanData);
-        setDismissed(false);
-        setVisible(true);
-        setLoading(false);
-
       } catch (error) {
-        console.error(
-          "AnnouncementBar unexpected error:",
-          error
-        );
+        console.error("Announcement bar error:", error);
 
-        if (!mounted) return;
-
-        setAnnouncement(null);
-        setVisible(false);
-        setLoading(false);
+        if (mounted) {
+          setAnnouncements([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    loadAnnouncement();
+    fetchAnnouncements();
 
     return () => {
       mounted = false;
     };
   }, []);
 
-  /* ==========================================================
-     HIDDEN
-  ========================================================== */
+  /* ============================================================
+     AUTO ROTATION
+     
+     Every 4 seconds the announcement changes.
+     No animation is applied.
+  ============================================================ */
 
-  if (
-    loading ||
-    !announcement ||
-    !visible ||
-    dismissed
-  ) {
-    return null;
-  }
+  useEffect(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-  /* ==========================================================
-     VARIANT
-  ========================================================== */
-
-  const variant =
-    variantStyles[
-      announcement.variant
-    ] || variantStyles.dark;
-
-  /* ==========================================================
-     BUTTON CHECK
-  ========================================================== */
-
-  const hasButton =
-    Boolean(
-      announcement.button_text &&
-        announcement.button_url
-    );
-
-  /* ==========================================================
-     BUTTON CLICK
-  ========================================================== */
-
-  const handleButtonClick = () => {
-    const url =
-      announcement.button_url?.trim();
-
-    if (!url) return;
-
-    if (
-      url.startsWith("/") ||
-      url.startsWith("#")
-    ) {
-      window.location.href = url;
+    if (announcements.length <= 1) {
       return;
     }
 
-    window.open(
-      url,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
+    timerRef.current = setInterval(() => {
+      setActiveIndex((current) => {
+        return (current + 1) % announcements.length;
+      });
+    }, 4000);
 
-  /* ==========================================================
-     DISMISS
-  ========================================================== */
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [announcements.length]);
 
-  const handleDismiss = () => {
-    setDismissed(true);
-    setVisible(false);
-  };
+  /* ============================================================
+     LOADING / EMPTY
+  ============================================================ */
 
-  /* ==========================================================
-     UI
-  ========================================================== */
+  if (loading || announcements.length === 0) {
+    return null;
+  }
+
+  /* ============================================================
+     CURRENT ANNOUNCEMENT
+  ============================================================ */
+
+  const currentAnnouncement = announcements[activeIndex];
+
+  if (!currentAnnouncement) {
+    return null;
+  }
+
+  /* ============================================================
+     MAIN BAR
+  ============================================================ */
 
   return (
-    <aside
-      role="region"
-      aria-label="Website announcement"
-      className={`
+    <div
+      className="
         relative
-        z-50
+        z-[20]
+        h-[42px]
         w-full
+        overflow-hidden
         border-b
-        ${variant.border}
-        ${variant.wrapper}
-      `}
+        border-[#B9E7EF]
+        bg-[#EAF8FA]
+        text-[#14283D]
+        fixed
+        sm:h-[44px]
+      "
     >
+      {/* ======================================================
+          FIXED HEIGHT CONTENT
+      ====================================================== */}
+
       <div
         className="
-          relative
           mx-auto
           flex
-          min-h-[42px]
+          h-full
           w-full
-          max-w-[1440px]
+          max-w-7xl
           items-center
           justify-center
-          px-12
-          py-2
-          sm:min-h-[44px]
-          sm:px-16
-          lg:px-20
+          px-4
+          sm:px-6
+          lg:px-8
         "
       >
-
-        {/* ==================================================
-            CENTER CONTENT
-        ================================================== */}
-
         <div
           className="
             flex
@@ -330,17 +251,17 @@ export default function AnnouncementBar() {
             items-center
             justify-center
             gap-2.5
+            overflow-hidden
             text-center
             sm:gap-3
           "
         >
-
           {/* ==================================================
               ICON
           ================================================== */}
 
           <span
-            className={`
+            className="
               flex
               h-7
               w-7
@@ -348,153 +269,45 @@ export default function AnnouncementBar() {
               items-center
               justify-center
               rounded-full
-              ${variant.icon}
-            `}
+              bg-[#079FC0]
+              text-white
+              sm:h-8
+              sm:w-8
+            "
           >
-            <AnnouncementIcon
-              variant={
-                announcement.variant
-              }
+            <Megaphone
+              size={14}
+              strokeWidth={2.5}
+              className="sm:h-4 sm:w-4"
             />
           </span>
 
           {/* ==================================================
-              MESSAGE
+              TEXT
+              
+              Text stays on one line.
+              Bar height never changes.
           ================================================== */}
 
           <p
-            className={`
-              m-0
-              max-w-[calc(100%-120px)]
-              text-center
+            className="
+              min-w-0
+              max-w-[calc(100%-42px)]
+              truncate
               text-[11px]
-              font-medium
-              leading-5
-              tracking-[0.01em]
+              font-semibold
+              leading-none
+              tracking-wide
+              text-[#14283D]
               sm:max-w-none
               sm:text-xs
-              md:text-[13px]
-              ${variant.message}
-            `}
+              md:text-sm
+            "
           >
-            {announcement.message}
+            {currentAnnouncement.text}
           </p>
-
-          {/* ==================================================
-              DESKTOP BUTTON
-          ================================================== */}
-
-          {hasButton && (
-            <button
-              type="button"
-              onClick={
-                handleButtonClick
-              }
-              className={`
-                group
-                hidden
-                shrink-0
-                items-center
-                gap-1.5
-                rounded-full
-                px-3
-                py-1.5
-                text-[10px]
-                font-semibold
-                tracking-wide
-                transition-all
-                duration-200
-                hover:-translate-y-px
-                sm:inline-flex
-                sm:text-[11px]
-                ${variant.button}
-              `}
-            >
-              {announcement.button_text}
-
-              <ArrowRight
-                size={13}
-                strokeWidth={2}
-                className="
-                  transition-transform
-                  duration-200
-                  group-hover:translate-x-0.5
-                "
-              />
-            </button>
-          )}
         </div>
-
-        {/* ==================================================
-            MOBILE BUTTON
-        ================================================== */}
-
-        {hasButton && (
-          <button
-            type="button"
-            onClick={
-              handleButtonClick
-            }
-            className={`
-              absolute
-              right-11
-              flex
-              h-7
-              items-center
-              gap-1
-              rounded-full
-              px-2.5
-              text-[9px]
-              font-semibold
-              transition
-              sm:hidden
-              ${variant.button}
-            `}
-          >
-            {announcement.button_text}
-
-            <ArrowRight
-              size={11}
-              strokeWidth={2}
-            />
-          </button>
-        )}
-
-        {/* ==================================================
-            CLOSE BUTTON
-        ================================================== */}
-
-        {announcement.dismissible && (
-          <button
-            type="button"
-            onClick={
-              handleDismiss
-            }
-            aria-label="Close announcement"
-            className={`
-              absolute
-              right-3
-              top-1/2
-              flex
-              h-7
-              w-7
-              -translate-y-1/2
-              items-center
-              justify-center
-              rounded-full
-              transition-all
-              duration-200
-              sm:right-5
-              ${variant.close}
-            `}
-          >
-            <X
-              size={15}
-              strokeWidth={2}
-            />
-          </button>
-        )}
       </div>
-    </aside>
+    </div>
   );
 }

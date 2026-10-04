@@ -10,6 +10,7 @@ import {
 ============================================================ */
 
 import Navbar from "./components/Navbar";
+import AnnouncementBar from "./components/AnnouncementBar";
 import Home from "./components/Home";
 import CategoriesProduct from "./components/CategoriesProduct";
 import Footer from "./components/Footer";
@@ -22,6 +23,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Products from "./pages/Products";
 import Cart from "./pages/Cart";
+import ProductDetails from "./pages/ProductDetails";
 
 /* ============================================================
    ADMIN PAGES
@@ -30,14 +32,14 @@ import Cart from "./pages/Cart";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminProducts from "./pages/AdminProducts";
+import AdminHero from "./pages/AdminHero";
+import AdminReviews from "./pages/AdminReviews";
 
 /* ============================================================
-   ADMIN ROUTE PROTECTION
+   ADMIN / PUBLIC COMPONENTS
 ============================================================ */
 
 import AdminRoute from "./components/AdminRoute";
-import AdminHero from "./pages/AdminHero";
-import AdminReviews from "./pages/AdminReviews";
 import Reviews from "./components/Reviews";
 
 /* ============================================================
@@ -46,7 +48,8 @@ import Reviews from "./components/Reviews";
 
 const Layout = () => {
   return (
-    <>
+    <div className="min-h-screen">
+
       {/* ======================================================
           NAVBAR
       ====================================================== */}
@@ -57,14 +60,17 @@ const Layout = () => {
           PAGE CONTENT
       ====================================================== */}
 
-      <Outlet />
+      <main>
+        <Outlet />
+      </main>
 
       {/* ======================================================
           FOOTER
       ====================================================== */}
 
       <Footer />
-    </>
+
+    </div>
   );
 };
 
@@ -77,7 +83,31 @@ const HomePage = () => {
     <>
       <Home />
       <CategoriesProduct />
-          </>
+    </>
+  );
+};
+
+/* ============================================================
+   PRODUCTS PAGE WITH ANNOUNCEMENT BAR
+============================================================ */
+
+const ProductsPage = () => {
+  return (
+    <>
+      {/* ======================================================
+          ANNOUNCEMENT BAR
+
+          Only appears on Products pages
+      ====================================================== */}
+
+      <AnnouncementBar />
+
+      {/* ======================================================
+          PRODUCTS
+      ====================================================== */}
+
+      <Products />
+    </>
   );
 };
 
@@ -166,26 +196,31 @@ const App = () => {
         {/* ====================================================
             PRODUCTS
             /products
+
+            Announcement Bar appears here
         ==================================================== */}
 
         <Route
           path="/products"
-          element={<Products />}
+          element={<ProductsPage />}
         />
 
         {/* ====================================================
             PRODUCT CATEGORY
+
             /products/dining-table
             /products/restaurant-furniture
             /products/sofa-set
             /products/wooden-sofa
             /products/l-shape-sofa
             /products/king-size-bed
+
+            Announcement Bar also appears here
         ==================================================== */}
 
         <Route
           path="/products/:category"
-          element={<Products />}
+          element={<ProductsPage />}
         />
 
         {/* ====================================================
@@ -198,33 +233,43 @@ const App = () => {
           element={<Cart />}
         />
 
+        {/* ====================================================
+            ADMIN HERO
+            /admin/herr
+        ==================================================== */}
+
         <Route
-  path="/admin/herr"
-  element={
-    <AdminRoute>
-      <AdminHero />
-    </AdminRoute>
-  }
-/>
+          path="/admin/herr"
+          element={
+            <AdminRoute>
+              <AdminHero />
+            </AdminRoute>
+          }
+        />
 
-<Route
-  path="/admin/reviews"
-  element={
-    <AdminRoute>
-      <AdminReviews />
-    </AdminRoute>
-  }
-/>
+        {/* ====================================================
+            ADMIN REVIEWS
+            /admin/reviews
+        ==================================================== */}
 
-<Route
-  path="/admin/reviews"
-  element={
-    <AdminRoute>
-      <AdminReviews />
-    </AdminRoute>
-  }
-/>
+        <Route
+          path="/admin/reviews"
+          element={
+            <AdminRoute>
+              <AdminReviews />
+            </AdminRoute>
+          }
+        />
 
+        {/* ====================================================
+            PRODUCT DETAILS
+            /product/:productId
+        ==================================================== */}
+
+        <Route
+          path="/product/:productId"
+          element={<ProductDetails />}
+        />
 
         {/* ====================================================
             404 PAGE

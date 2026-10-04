@@ -1,759 +1,166 @@
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-
-import { Link, useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   Search,
   ShoppingBag,
   MessageCircle,
-  X,
-  Check,
-  SlidersHorizontal,
   Truck,
-  Armchair,
+  ArrowUpRight,
   RefreshCw,
-  AlertCircle,
 } from "lucide-react";
-import AnnouncementBar from "../components/AnnouncementBar";
 
 import { supabase } from "../lib/supabase";
 
-/* ============================================================
-   CATEGORIES
-============================================================ */
-
-const categories = [
-  {
-    name: "Dining Table",
-    slug: "dining-table",
-  },
-  {
-    name: "Restaurant Furniture",
-    slug: "restaurant-furniture",
-  },
-  {
-    name: "Sofa Set",
-    slug: "sofa-set",
-  },
-  {
-    name: "Wooden Sofa",
-    slug: "wooden-sofa",
-  },
-  {
-    name: "L.Shape Sofa",
-    slug: "l-shape-sofa",
-  },
-  {
-    name: "King Size Bed",
-    slug: "king-size-bed",
-  },
-];
-
-/* ============================================================
-   CONSTANTS
-============================================================ */
-
-const CART_KEY = "cart";
-
 const WHATSAPP_NUMBER = "923033939167";
 
-const DELIVERY_TITLE = "All over pakistan";
-
-const DELIVERY_TEXT =
-  "Safe & fast delivery across Pakistan.";
-
-/* ============================================================
-   CART STORAGE
-============================================================ */
-
-const readCart = () => {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem(CART_KEY)
-    );
-
-    return Array.isArray(saved) ? saved : [];
-  } catch {
-    return [];
-  }
-};
-
-/* ============================================================
-   CATEGORY SLUG HELPER
-============================================================ */
-
-const getCategorySlug = (categoryName) => {
-  const found = categories.find(
-    (item) => item.name === categoryName
-  );
-
-  return found?.slug || "";
-};
-
-/* ============================================================
-   PRICE FORMATTER
-============================================================ */
+const categories = [
+  "All Products",
+  "Dining Table",
+  "Restaurant Furniture",
+  "Sofa Set",
+  "Wooden Sofa",
+  "L.Shape Sofa",
+  "King Size Bed",
+];
 
 const formatPrice = (price) => {
-  if (
-    price === null ||
-    price === undefined ||
-    price === ""
-  ) {
-    return null;
+  if (price === null || price === undefined || price === "") {
+    return "Contact for Price";
   }
 
-  const numericPrice = Number(price);
-
-  if (Number.isNaN(numericPrice)) {
-    return null;
-  }
-
-  return `PKR ${numericPrice.toLocaleString("en-PK")}`;
+  return `PKR ${Number(price).toLocaleString("en-PK")}`;
 };
 
-/* ============================================================
-   PRODUCTS COMPONENT
-============================================================ */
-
 export default function Products() {
-  const { category: routeCategory } = useParams();
-
-  /* ==========================================================
-     ACTIVE CATEGORY
-  ========================================================== */
-
-  const activeCategory = categories.some(
-    (item) => item.slug === routeCategory
-  )
-    ? routeCategory
-    : "all";
-
-  /* ==========================================================
-     SUPABASE PRODUCTS
-  ========================================================== */
-
   const [products, setProducts] = useState([]);
-
   const [loading, setLoading] = useState(true);
 
-  const [errorMessage, setErrorMessage] = useState("");
-
-  /* ==========================================================
-     UI STATES
-  ========================================================== */
-
   const [search, setSearch] = useState("");
-
-  const [sortBy, setSortBy] = useState("default");
-
-  const [cart, setCart] = useState(readCart);
-
-  const [preview, setPreview] = useState(null);
+  const [activeCategory, setActiveCategory] =
+    useState("All Products");
 
   const [addedId, setAddedId] = useState(null);
 
-  const [flyingItem, setFlyingItem] = useState(null);
-
-  /* ==========================================================
-     REFS
-  ========================================================== */
-
-  const imageRefs = useRef({});
-
-  const animationRef = useRef(null);
-
-  const addedTimerRef = useRef(null);
-
-  const pendingRef = useRef(new Set());
-
-  const mountedRef = useRef(false);
-
-  /* ==========================================================
-     SELECTED CATEGORY
-  ========================================================== */
-
-  const selectedCategory =
-    categories.find(
-      (item) => item.slug === activeCategory
-    )?.name || "All Products";
-
-  /* ==========================================================
-     FETCH PRODUCTS FROM SUPABASE
-  ========================================================== */
-
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-
-      setErrorMessage("");
-
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("products")
-        .select(`
-          id,
-          title,
-          description,
-          price,
-          category,
-          image_url,
-          status,
-          featured,
-          created_at
-        `)
-        .eq("status", "active")
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      /* ======================================================
-         NORMALIZE SUPABASE PRODUCTS
-      ====================================================== */
-
-      const normalizedProducts = (
-        data || []
-      ).map((product) => ({
-        id: `supabase-${product.id}`,
-
-        databaseId: product.id,
-
-        title:
-          product.title ||
-          "Untitled Product",
-
-        description:
-          product.description ||
-          "Quality furniture designed for your space.",
-
-        category:
-          product.category ||
-          "Furniture",
-
-        slug:
-          getCategorySlug(product.category),
-
-        image:
-          product.image_url ||
-          "",
-
-        price:
-          product.price ?? null,
-
-        featured:
-          product.featured ?? false,
-
-        status:
-          product.status,
-
-        created_at:
-          product.created_at,
-
-        source: "supabase",
-      }));
-
-      setProducts(normalizedProducts);
-    } catch (error) {
-      console.error(
-        "Supabase products error:",
-        error
-      );
-
-      setErrorMessage(
-        error?.message ||
-          "Unable to load products."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /* ==========================================================
-     LOAD PRODUCTS
-  ========================================================== */
+  // ============================================================
+  // FETCH PRODUCTS
+  // ============================================================
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  /* ==========================================================
-     FILTER PRODUCTS
-  ========================================================== */
-
-  const filteredProducts = useMemo(() => {
-    let result = products.filter(
-      (product) => {
-        const matchesCategory =
-          activeCategory === "all" ||
-          product.slug === activeCategory;
-
-        const searchValue =
-          search.toLowerCase().trim();
-
-        const matchesSearch =
-          !searchValue ||
-          product.title
-            ?.toLowerCase()
-            .includes(searchValue) ||
-          product.category
-            ?.toLowerCase()
-            .includes(searchValue) ||
-          product.description
-            ?.toLowerCase()
-            .includes(searchValue);
-
-        return (
-          matchesCategory &&
-          matchesSearch
-        );
-      }
-    );
-
-    /* ========================================================
-       NAME A-Z
-    ======================================================== */
-
-    if (sortBy === "name-asc") {
-      result = [...result].sort(
-        (a, b) =>
-          a.title.localeCompare(b.title)
-      );
-    }
-
-    /* ========================================================
-       NAME Z-A
-    ======================================================== */
-
-    if (sortBy === "name-desc") {
-      result = [...result].sort(
-        (a, b) =>
-          b.title.localeCompare(a.title)
-      );
-    }
-
-    return result;
-  }, [
-    products,
-    activeCategory,
-    search,
-    sortBy,
-  ]);
-
-  /* ==========================================================
-     SAVE CART
-  ========================================================== */
-
-  useEffect(() => {
+  const fetchProducts = async () => {
     try {
-      localStorage.setItem(
-        CART_KEY,
-        JSON.stringify(cart)
-      );
+      setLoading(true);
 
-      window.dispatchEvent(
-        new Event("cartUpdated")
-      );
-    } catch {
-      // Storage unavailable
-    }
-  }, [cart]);
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
 
-  /* ==========================================================
-     CATEGORY CHANGE
-  ========================================================== */
+      if (error) throw error;
 
-  useEffect(() => {
-    setSearch("");
-
-    setPreview(null);
-  }, [activeCategory]);
-
-  /* ==========================================================
-     CLEANUP
-  ========================================================== */
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-
-      animationRef.current?.cancel();
-
-      clearTimeout(
-        addedTimerRef.current
-      );
-
-      pendingRef.current.clear();
-    };
-  }, []);
-
-  /* ==========================================================
-     PREVIEW KEYBOARD CONTROLS
-  ========================================================== */
-
-  useEffect(() => {
-    if (!preview) {
-      return;
-    }
-
-    const previousOverflow =
-      document.body.style.overflow;
-
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setPreview(null);
-      }
-    };
-
-    document.body.style.overflow =
-      "hidden";
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown
-    );
-
-    return () => {
-      document.body.style.overflow =
-        previousOverflow;
-
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-    };
-  }, [preview]);
-
-  /* ==========================================================
-     OPEN PRODUCT PREVIEW
-  ========================================================== */
-
-  const openProductPreview = (product) => {
-    setPreview(product);
-  };
-
-  /* ==========================================================
-     PRODUCT CARD KEYBOARD SUPPORT
-  ========================================================== */
-
-  const handleProductCardKeyDown = (
-    event,
-    product
-  ) => {
-    if (
-      event.key === "Enter" ||
-      event.key === " "
-    ) {
-      event.preventDefault();
-
-      openProductPreview(product);
+      setProducts(data || []);
+    } catch (error) {
+      console.error("Products error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  /* ==========================================================
-     ADD PRODUCT TO CART
-  ========================================================== */
+  // ============================================================
+  // EXPLORE PRODUCTS
+  // ============================================================
 
-  const addProductToCart = (product) => {
-    setCart((current) => {
-      const existing = current.find(
-        (item) => item.id === product.id
+  const scrollToProducts = () => {
+    const section = document.getElementById("products-list");
+
+    if (section) {
+      section.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  };
+
+  // ============================================================
+  // FILTER PRODUCTS
+  // ============================================================
+
+  const filteredProducts = products.filter((product) => {
+    const matchesCategory =
+      activeCategory === "All Products" ||
+      product.category === activeCategory;
+
+    const searchText = search.toLowerCase().trim();
+
+    const matchesSearch =
+      !searchText ||
+      product.title?.toLowerCase().includes(searchText) ||
+      product.category?.toLowerCase().includes(searchText);
+
+    return matchesCategory && matchesSearch;
+  });
+
+  // ============================================================
+  // ADD TO CART
+  // ============================================================
+
+  const addToCart = (product) => {
+    try {
+      const cart =
+        JSON.parse(localStorage.getItem("cart")) || [];
+
+      const existing = cart.find(
+        (item) => String(item.id) === String(product.id)
       );
+
+      let updatedCart;
 
       if (existing) {
-        return current.map((item) =>
-          item.id === product.id
+        updatedCart = cart.map((item) =>
+          String(item.id) === String(product.id)
             ? {
                 ...item,
-                quantity:
-                  (Number(item.quantity) || 1) +
-                  1,
+                quantity: (Number(item.quantity) || 1) + 1,
               }
             : item
         );
+      } else {
+        updatedCart = [
+          ...cart,
+          {
+            ...product,
+            quantity: 1,
+          },
+        ];
       }
 
-      return [
-        ...current,
-        {
-          ...product,
-          quantity: 1,
-        },
-      ];
-    });
-
-    setAddedId(product.id);
-
-    clearTimeout(
-      addedTimerRef.current
-    );
-
-    addedTimerRef.current =
-      setTimeout(() => {
-        setAddedId((current) =>
-          current === product.id
-            ? null
-            : current
-        );
-      }, 1600);
-  };
-
-  /* ==========================================================
-     ADD TO CART ANIMATION
-  ========================================================== */
-
-  const addToCart = (product) => {
-    if (
-      pendingRef.current.has(product.id)
-    ) {
-      return;
-    }
-
-    const imageElement =
-      imageRefs.current[product.id];
-
-    const cartElement =
-      document.querySelector(
-        "[data-cart-target]"
-      ) ||
-      document.querySelector(
-        'header a[href="/cart"]'
+      localStorage.setItem(
+        "cart",
+        JSON.stringify(updatedCart)
       );
 
-    /* ========================================================
-       FALLBACK
-    ======================================================== */
+      window.dispatchEvent(new Event("cartUpdated"));
 
-    if (
-      !imageElement ||
-      !cartElement ||
-      !product.image ||
-      window.matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      ).matches
-    ) {
-      addProductToCart(product);
+      setAddedId(product.id);
 
-      return;
+      setTimeout(() => {
+        setAddedId(null);
+      }, 1500);
+    } catch (error) {
+      console.error("Cart error:", error);
     }
-
-    /* ========================================================
-       IMAGE POSITION
-    ======================================================== */
-
-    const imageRect =
-      imageElement.getBoundingClientRect();
-
-    const cartRect =
-      cartElement.getBoundingClientRect();
-
-    const startX =
-      imageRect.left +
-      imageRect.width / 2;
-
-    const startY =
-      imageRect.top +
-      imageRect.height / 2;
-
-    const endX =
-      cartRect.left +
-      cartRect.width / 2;
-
-    const endY =
-      cartRect.top +
-      cartRect.height / 2;
-
-    const size = Math.min(
-      imageRect.width * 0.42,
-      86
-    );
-
-    const dx = endX - startX;
-
-    const dy = endY - startY;
-
-    const zigzag = Math.min(
-      70,
-      Math.max(
-        24,
-        Math.abs(dx) * 0.12
-      )
-    );
-
-    pendingRef.current.add(product.id);
-
-    setFlyingItem({
-      id: product.id,
-      image: product.image,
-      size,
-      startX,
-      startY,
-    });
-
-    requestAnimationFrame(() => {
-      const flyingElement =
-        document.querySelector(
-          "[data-cart-flying-image]"
-        );
-
-      if (!flyingElement) {
-        addProductToCart(product);
-
-        pendingRef.current.delete(
-          product.id
-        );
-
-        setFlyingItem(null);
-
-        return;
-      }
-
-      const point = (
-        x,
-        y,
-        scale,
-        rotate
-      ) =>
-        `translate(${
-          x - size / 2
-        }px, ${
-          y - size / 2
-        }px) scale(${scale}) rotate(${rotate}deg)`;
-
-      const animation =
-        flyingElement.animate(
-          [
-            {
-              transform: point(
-                startX,
-                startY,
-                1,
-                0
-              ),
-              opacity: 1,
-            },
-
-            {
-              transform: point(
-                startX +
-                  dx * 0.2 +
-                  zigzag,
-                startY +
-                  dy * 0.2 -
-                  35,
-                0.85,
-                12
-              ),
-              opacity: 1,
-            },
-
-            {
-              transform: point(
-                startX +
-                  dx * 0.4 -
-                  zigzag,
-                startY +
-                  dy * 0.4 +
-                  25,
-                0.7,
-                -12
-              ),
-              opacity: 0.95,
-            },
-
-            {
-              transform: point(
-                startX +
-                  dx * 0.62 +
-                  zigzag * 0.55,
-                startY +
-                  dy * 0.62 -
-                  18,
-                0.5,
-                10
-              ),
-              opacity: 0.8,
-            },
-
-            {
-              transform: point(
-                startX +
-                  dx * 0.82 -
-                  zigzag * 0.3,
-                startY +
-                  dy * 0.82 +
-                  8,
-                0.3,
-                -6
-              ),
-              opacity: 0.6,
-            },
-
-            {
-              transform: point(
-                endX,
-                endY,
-                0.08,
-                0
-              ),
-              opacity: 0,
-            },
-          ],
-          {
-            duration: 850,
-
-            easing:
-              "cubic-bezier(.22,.75,.3,1)",
-
-            fill: "forwards",
-          }
-        );
-
-      animationRef.current =
-        animation;
-
-      animation.onfinish = () => {
-        if (mountedRef.current) {
-          addProductToCart(product);
-
-          setFlyingItem(null);
-        }
-
-        pendingRef.current.delete(
-          product.id
-        );
-
-        animationRef.current = null;
-      };
-
-      animation.oncancel = () => {
-        pendingRef.current.delete(
-          product.id
-        );
-
-        animationRef.current = null;
-      };
-    });
   };
 
-  /* ==========================================================
-     WHATSAPP
-  ========================================================== */
+  // ============================================================
+  // WHATSAPP
+  // ============================================================
 
-  const openWhatsApp = (product) => {
-    const message = `Hello! I'm interested in ${product.title}. Please share more details.`;
+  const whatsappInquiry = (product) => {
+    const message = `Hello AR Woodworks! I am interested in ${product.title}. Please share more details.`;
 
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
@@ -764,800 +171,574 @@ export default function Products() {
     );
   };
 
-  /* ==========================================================
-     LOADING
-  ========================================================== */
+  return (
+    <main className="min-h-screen overflow-x-hidden bg-[#F7F9FA] text-[#14283D]">
 
-  if (loading) {
-    return (
-      <section className="flex min-h-screen items-center justify-center bg-[#F7F9FA] px-4">
-        <div className="text-center">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
-            <RefreshCw
-              size={25}
-              className="animate-spin text-[#079FC0]"
-            />
-          </div>
+      {/* ======================================================
+          HERO
+      ======================================================= */}
 
-          <h2 className="text-lg font-bold text-[#172B3A]">
-            Loading products
-          </h2>
+      <section className="bg-[#14283D] px-4 py-14 text-white sm:px-8 sm:py-20">
+        <div className="mx-auto max-w-7xl">
 
-          <p className="mt-1 text-sm text-slate-500">
-            Please wait while we load our
-            furniture collection.
+          <p className="mb-4 text-[10px] font-bold uppercase tracking-[2.5px] text-[#079FC0] sm:text-xs sm:tracking-[3px]">
+            AR Woodworks Collection
           </p>
+
+          <h1 className="max-w-3xl text-3xl font-bold leading-[1.15] sm:text-5xl lg:text-6xl">
+            Discover Furniture Designed for Your Space
+          </h1>
+
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+            Explore premium furniture crafted to bring
+            comfort, functionality, and timeless beauty to
+            your home.
+          </p>
+
+          <button
+            type="button"
+            onClick={scrollToProducts}
+            className="
+              mt-8
+              inline-flex
+              items-center
+              justify-center
+              gap-2
+              rounded-lg
+              bg-[#079FC0]
+              px-5
+              py-3
+              text-xs
+              font-bold
+              text-white
+              transition
+              hover:bg-[#068EAA]
+              sm:px-6
+              sm:py-3.5
+              sm:text-sm
+            "
+          >
+            Explore Products
+            <ArrowUpRight size={17} />
+          </button>
+
         </div>
       </section>
-    );
-  }
 
-  /* ==========================================================
-     MAIN UI
-  ========================================================== */
+      {/* ======================================================
+          PRODUCTS SECTION
+      ======================================================= */}
 
-  return (
-    <>
-    <AnnouncementBar/>
-    
-    <section className="min-h-screen bg-[#F7F9FA] text-[#172B3A]">
-      <style>{`
-
-        @keyframes cartBadgePop {
-          0% {
-            transform: scale(1);
-          }
-
-          35% {
-            transform: scale(1.3);
-          }
-
-          65% {
-            transform: scale(.92);
-          }
-
-          100% {
-            transform: scale(1);
-          }
-        }
-
-        .cart-badge-pop {
-          animation: cartBadgePop .5s ease-out;
-        }
-
-        .cart-fly-image {
-          position: fixed;
-          top: 0;
-          left: 0;
-          z-index: 9999;
-          pointer-events: none;
-          overflow: hidden;
-          border: 2px solid white;
-          border-radius: 14px;
-          box-shadow:
-            0 15px 40px rgba(7, 31, 48, .25);
-          will-change: transform, opacity;
-        }
-
-        .product-card {
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .cart-badge-pop {
-            animation: none !important;
-          }
-        }
-
-      `}</style>
-
-      <div className="mx-auto max-w-[1440px] px-3 py-5 sm:px-6 sm:py-8 lg:px-10">
+      <section
+        id="products-list"
+        className="
+          mx-auto
+          max-w-7xl
+          scroll-mt-24
+          px-3
+          py-10
+          sm:px-6
+          sm:py-14
+          lg:px-8
+        "
+      >
 
         {/* ====================================================
-            HERO
-        ==================================================== */}
+            SECTION HEADING
+        ===================================================== */}
 
-        <div className="relative mb-7 flex min-h-[210px] items-center overflow-hidden rounded-2xl bg-[#14283D] px-5 py-7 text-white sm:mb-8 sm:min-h-[260px] sm:px-10 sm:py-8 lg:px-14">
+        <div className="mb-7">
 
-          <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[#079FC0]/15 blur-3xl" />
-
-          <div className="absolute -bottom-28 right-1/4 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
-
-          <div className="relative z-10 max-w-2xl">
-
-            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-300 sm:mb-4 sm:text-sm">
-              <span className="h-px w-7 bg-cyan-400 sm:w-8" />
-
-              Furniture Collection
-            </div>
-
-            <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-              Discover furniture designed-
-              <br className="hidden sm:block" />
-              for your space.
-            </h1>
-
-            <p className="mt-3 max-w-lg text-xs leading-5 text-slate-300 sm:mt-4 sm:text-base sm:leading-6">
-              Explore thoughtfully designed
-              furniture for your home and
-              workspace.
-            </p>
-
-            {/* HERO DELIVERY */}
-
-            <div className="mt-4 inline-flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-left backdrop-blur-sm sm:mt-5 sm:px-4 sm:py-3">
-
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-400/10 sm:h-9 sm:w-9">
-                <Truck
-                  size={16}
-                  className="text-cyan-300"
-                />
-              </div>
-
-              <div>
-                <p className="text-[10px] font-bold text-white sm:text-xs">
-                  {DELIVERY_TITLE}
-                </p>
-
-                <p className="mt-0.5 text-[9px] leading-4 text-slate-300 sm:text-[11px]">
-                  {DELIVERY_TEXT}
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* ====================================================
-            ERROR
-        ==================================================== */}
-
-        {errorMessage && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-red-700">
-
-            <AlertCircle
-              size={19}
-              className="mt-0.5 shrink-0"
-            />
-
-            <div className="flex-1">
-
-              <p className="text-sm font-semibold">
-                Unable to load products
-              </p>
-
-              <p className="mt-1 text-xs leading-5 text-red-600">
-                {errorMessage}
-              </p>
-
-            </div>
-
-            <button
-              type="button"
-              onClick={fetchProducts}
-              className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-red-700 shadow-sm transition hover:bg-red-100"
-            >
-              Retry
-            </button>
-
-          </div>
-        )}
-
-        {/* ====================================================
-            CATEGORY TITLE
-        ==================================================== */}
-
-        <div className="mb-4 sm:mb-5">
-
-          <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#079FC0] sm:text-xs">
-            Shop by collection
+          <p className="text-[10px] font-bold uppercase tracking-[2px] text-[#079FC0] sm:text-xs sm:tracking-widest">
+            Explore Our Collection
           </p>
 
-          <h2 className="mt-1 text-lg font-bold sm:text-2xl">
-            {selectedCategory}
+          <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
+            Our Products
           </h2>
 
-          <p className="mt-1 text-[11px] text-slate-500 sm:text-sm">
-            Find furniture that feels like home.
-          </p>
-
         </div>
 
         {/* ====================================================
-            CATEGORY FILTERS
-        ==================================================== */}
+            SEARCH
+        ===================================================== */}
 
-        <div className="sticky top-0 z-40 -mx-3 mb-5 border-b border-slate-200/80 bg-white/95 px-3 py-2.5 backdrop-blur-md sm:-mx-6 sm:mb-6 sm:px-6 sm:py-3 lg:-mx-10 lg:px-10">
+        <div className="mb-5">
 
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-
-            <Link
-              to="/products"
-              className={`shrink-0 rounded-lg border px-3 py-2 text-[10px] font-semibold transition sm:px-4 sm:py-2.5 sm:text-sm ${
-                activeCategory === "all"
-                  ? "border-[#14283D] bg-[#14283D] text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-[#079FC0] hover:text-[#079FC0]"
-              }`}
-            >
-              All Products
-            </Link>
-
-            {categories.map((item) => (
-              <Link
-                key={item.slug}
-                to={`/products/${item.slug}`}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-[10px] font-semibold transition sm:px-4 sm:py-2.5 sm:text-sm ${
-                  activeCategory === item.slug
-                    ? "border-[#14283D] bg-[#14283D] text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-[#079FC0] hover:text-[#079FC0]"
-                }`}
-              >
-                {item.name}
-              </Link>
-            ))}
-
-          </div>
-
-        </div>
-
-        {/* ====================================================
-            SEARCH + SORT
-        ==================================================== */}
-
-        <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-
-          <div className="relative w-full sm:max-w-md">
+          <div className="relative w-full max-w-md">
 
             <Search
               size={17}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 sm:left-4 sm:size-[18px]"
+              className="
+                absolute
+                left-4
+                top-1/2
+                -translate-y-1/2
+                text-slate-400
+              "
             />
 
             <input
-              type="search"
+              type="text"
               value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search furniture..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-xs outline-none transition focus:border-[#079FC0] focus:ring-4 focus:ring-cyan-50 sm:py-3 sm:pl-11 sm:pr-4 sm:text-sm"
+              className="
+                w-full
+                rounded-xl
+                border
+                border-slate-200
+                bg-white
+                py-3
+                pl-11
+                pr-4
+                text-sm
+                text-[#14283D]
+                outline-none
+                transition
+                placeholder:text-slate-400
+                focus:border-[#079FC0]
+                focus:ring-2
+                focus:ring-[#079FC0]/10
+              "
             />
-
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-
-            <p className="text-[11px] text-slate-500 sm:text-sm">
-
-              <span className="font-bold text-[#172B3A]">
-                {filteredProducts.length}
-              </span>{" "}
-              products
-
-            </p>
-
-            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:gap-2 sm:px-3">
-
-              <SlidersHorizontal
-                size={15}
-                className="text-[#079FC0]"
-              />
-
-              <select
-                value={sortBy}
-                onChange={(event) =>
-                  setSortBy(
-                    event.target.value
-                  )
-                }
-                aria-label="Sort products"
-                className="max-w-[125px] bg-transparent py-2.5 text-[10px] outline-none sm:max-w-[145px] sm:py-3 sm:text-sm"
-              >
-
-                <option value="default">
-                  Default
-                </option>
-
-                <option value="name-asc">
-                  Name: A–Z
-                </option>
-
-                <option value="name-desc">
-                  Name: Z–A
-                </option>
-
-              </select>
-
-            </div>
 
           </div>
 
         </div>
 
         {/* ====================================================
-            PRODUCT GRID
-        ==================================================== */}
+            STICKY CATEGORY AREA
 
-        {filteredProducts.length > 0 ? (
+            IMPORTANT:
+            Categories normal position par start hongi.
+            Scroll karte hue jab top par reach hongi,
+            wahi par stick ho jayengi.
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4 lg:gap-6">
+            Page load par fixed nahi hongi.
+        ===================================================== */}
 
-            {filteredProducts.map((product) => {
+        <div
+          className="
+            sticky
+            top-0
+            z-40
+            -mx-3
+            mb-9
+            border-b
+            border-slate-200
+            bg-[#F7F9FA]/95
+            px-3
+            py-3
+            shadow-sm
+            backdrop-blur-md
+            sm:-mx-6
+            sm:px-6
+            lg:-mx-8
+            lg:px-8
+          "
+        >
 
-              const isAdded =
-                addedId === product.id;
+          <div
+            className="
+              flex
+              w-full
+              flex-nowrap
+              items-center
+              gap-2
+              overflow-x-auto
+              overflow-y-hidden
+              whitespace-nowrap
+              pb-1
+              [scrollbar-width:none]
+              [&::-webkit-scrollbar]:hidden
+            "
+          >
 
-              const isAdding =
-                pendingRef.current.has(
-                  product.id
-                );
-
-              const displayPrice =
-                formatPrice(product.price);
+            {categories.map((category) => {
+              const active =
+                activeCategory === category;
 
               return (
-                <article
-                  key={product.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`View ${product.title}`}
+                <button
+                  key={category}
+                  type="button"
                   onClick={() =>
-                    openProductPreview(product)
+                    setActiveCategory(category)
                   }
-                  onKeyDown={(event) =>
-                    handleProductCardKeyDown(
-                      event,
-                      product
-                    )
-                  }
-                  className="
-                    product-card
-                    group
-                    min-w-0
-                    cursor-pointer
-                    overflow-hidden
-                    rounded-xl
-                    border
-                    border-slate-200/80
-                    bg-white
-                    outline-none
-                    transition-all
-                    duration-300
-                    hover:-translate-y-1
-                    hover:border-cyan-200
-                    hover:shadow-xl
-                    hover:shadow-slate-200/60
-                    focus-visible:ring-2
-                    focus-visible:ring-[#079FC0]
-                    focus-visible:ring-offset-2
-                    active:scale-[0.995]
-                  "
+                  className={`
+                    inline-flex
+                    h-10
+                    shrink-0
+                    items-center
+                    justify-center
+                    whitespace-nowrap
+                    rounded-lg
+                    px-4
+                    text-xs
+                    font-semibold
+                    transition-colors
+                    sm:text-sm
+                    ${
+                      active
+                        ? "bg-[#14283D] text-white"
+                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#079FC0] hover:text-[#079FC0]"
+                    }
+                  `}
                 >
-
-                  {/* ==================================================
-                      IMAGE
-                  ================================================== */}
-
-                  <div className="relative aspect-square overflow-hidden bg-[#F0F3F5] sm:aspect-[4/4.2]">
-
-                    {product.image ? (
-
-                      <img
-                        ref={(element) => {
-                          imageRefs.current[
-                            product.id
-                          ] = element;
-                        }}
-                        src={product.image}
-                        alt={product.title}
-                        loading="lazy"
-                        decoding="async"
-                        fetchPriority="low"
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
-                      />
-
-                    ) : (
-
-                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
-
-                        <Armchair
-                          size={26}
-                          strokeWidth={1.5}
-                        />
-
-                        <span className="px-2 text-center text-[9px] sm:text-xs">
-                          Image unavailable
-                        </span>
-
-                      </div>
-
-                    )}
-
-                    {/* CATEGORY */}
-
-                    <span
-                      className="
-                        absolute
-                        left-1.5
-                        top-1.5
-                        max-w-[calc(100%-1.5rem)]
-                        truncate
-                        rounded-md
-                        bg-white/95
-                        px-2
-                        py-1
-                        text-[7px]
-                        font-semibold
-                        text-[#087F99]
-                        shadow-sm
-                        backdrop-blur-sm
-                        sm:left-3
-                        sm:top-3
-                        sm:px-2.5
-                        sm:py-1.5
-                        sm:text-[10px]
-                      "
-                    >
-                      {product.category}
-                    </span>
-
-                  </div>
-
-                  {/* ==================================================
-                      DETAILS
-                  ================================================== */}
-
-                  <div className="p-2.5 sm:p-4">
-
-                    {/* TITLE */}
-
-                    <h3 className="truncate text-[11px] font-bold leading-5 text-[#172B3A] sm:text-base sm:leading-6">
-                      {product.title}
-                    </h3>
-
-                    {/* DESCRIPTION */}
-
-                    <p className="mt-1 line-clamp-2 text-[9px] leading-3.5 text-slate-500 sm:mt-1.5 sm:text-sm sm:leading-5">
-                      {product.description ||
-                        "Quality furniture designed for your space."}
-                    </p>
-
-                    {/* PRICE */}
-
-                    {displayPrice && (
-                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-[#F5F8F9] px-2 py-1.5 sm:mt-2.5 sm:px-3 sm:py-2">
-
-                        <span className="text-[7px] font-semibold uppercase tracking-wider text-slate-400 sm:text-[10px]">
-                          Price
-                        </span>
-
-                        <span className="truncate text-[10px] font-bold leading-4 text-[#14283D] sm:text-base sm:leading-5">
-                          {displayPrice}
-                        </span>
-
-                      </div>
-                    )}
-
-                    {/* ==================================================
-                        DELIVERY — PROFESSIONAL
-                    ================================================== */}
-
-                    <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 sm:mt-3 sm:gap-2.5 sm:px-3 sm:py-2.5">
-
-                      {/* ICON */}
-
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-[#079FC0] shadow-sm ring-1 ring-slate-100 sm:h-8 sm:w-8">
-
-                        <Truck
-                          size={14}
-                          strokeWidth={2}
-                          className="sm:h-[15px] sm:w-[15px]"
-                        />
-
-                      </div>
-
-                      {/* TEXT */}
-
-                      <div className="min-w-0">
-
-                        <p className="text-[8px] font-bold leading-3.5 text-[#172B3A] sm:text-[11px] sm:leading-4">
-                          {DELIVERY_TITLE}
-                        </p>
-
-                        <p className="mt-0.5 text-[7px] leading-3 text-slate-500 sm:text-[10px] sm:leading-3.5">
-                          {DELIVERY_TEXT}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                    {/* ==================================================
-                        ACTIONS
-                    ================================================== */}
-
-                    <div className="mt-2.5 grid grid-cols-[1fr_32px] gap-1.5 sm:mt-3 sm:grid-cols-[1fr_44px] sm:gap-2">
-
-                      {/* CART */}
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-
-                          addToCart(product);
-                        }}
-                        disabled={isAdding}
-                        aria-live="polite"
-                        className={`flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[8px] font-semibold text-white transition-all duration-200 disabled:cursor-wait sm:gap-2 sm:px-2 sm:py-2.5 sm:text-sm ${
-                          isAdded
-                            ? "bg-emerald-600"
-                            : "bg-[#14283D] hover:bg-[#079FC0]"
-                        }`}
-                      >
-
-                        {isAdded ? (
-                          <>
-                            <Check
-                              size={12}
-                              className="shrink-0 sm:h-4 sm:w-4"
-                            />
-
-                            <span className="truncate">
-                              Added
-                            </span>
-                          </>
-                        ) : isAdding ? (
-                          <>
-                            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white sm:h-4 sm:w-4" />
-
-                            <span className="truncate">
-                              Adding...
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingBag
-                              size={12}
-                              className="shrink-0 sm:h-[15px] sm:w-[15px]"
-                            />
-
-                            <span className="truncate">
-                              Add to Cart
-                            </span>
-                          </>
-                        )}
-
-                      </button>
-
-                      {/* WHATSAPP */}
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-
-                          openWhatsApp(product);
-                        }}
-                        aria-label={`Ask about ${product.title} on WhatsApp`}
-                        className="flex h-8 items-center justify-center rounded-lg border border-[#BDE8D0] bg-[#F0FBF5] text-[#21834D] transition hover:bg-[#21834D] hover:text-white sm:h-10"
-                      >
-
-                        <MessageCircle
-                          size={15}
-                          className="sm:h-[19px] sm:w-[19px]"
-                        />
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </article>
+                  {category}
+                </button>
               );
             })}
+
+          </div>
+
+        </div>
+
+        {/* ====================================================
+            LOADING
+        ===================================================== */}
+
+        {loading ? (
+
+          <div className="flex min-h-64 items-center justify-center">
+
+            <div className="text-center">
+
+              <RefreshCw
+                size={27}
+                className="mx-auto animate-spin text-[#079FC0]"
+              />
+
+              <p className="mt-4 text-sm text-slate-500">
+                Loading products...
+              </p>
+
+            </div>
+
+          </div>
+
+        ) : filteredProducts.length === 0 ? (
+
+          /* ==================================================
+             NO PRODUCTS
+          =================================================== */
+
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-16 text-center">
+
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
+
+              <Search
+                size={20}
+                className="text-slate-400"
+              />
+
+            </div>
+
+            <h3 className="mt-4 text-lg font-bold">
+              No Products Found
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Try another category or search for a
+              different product.
+            </p>
 
           </div>
 
         ) : (
 
           /* ==================================================
-             NO PRODUCTS
-          ================================================== */
+             PRODUCT GRID
+          =================================================== */
 
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-16 text-center">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 lg:gap-6">
 
-            <Search
-              className="mx-auto mb-3 text-slate-400"
-              size={30}
-            />
+            {filteredProducts.map((product) => (
 
-            <h3 className="text-lg font-bold">
-              No products found
-            </h3>
+              <article
+                key={product.id}
+                className="
+                  group
+                  flex
+                  h-full
+                  flex-col
+                  overflow-hidden
+                  rounded-xl
+                  border
+                  border-slate-200
+                  bg-white
+                  transition
+                  duration-300
+                  hover:-translate-y-0.5
+                  hover:shadow-lg
+                "
+              >
 
-            <p className="mt-2 text-sm text-slate-500">
-              Try another search or browse
-              our collections.
-            </p>
+                {/* PRODUCT LINK */}
 
-            <Link
-              to="/products"
-              onClick={(event) =>
-                event.stopPropagation()
-              }
-              className="mt-5 inline-flex rounded-lg bg-[#079FC0] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#087F99]"
-            >
-              View all products
-            </Link>
+                <Link
+                  to={`/product/${product.id}`}
+                  className="flex flex-1 flex-col"
+                >
+
+                  {/* PRODUCT IMAGE */}
+
+                  <div className="relative aspect-square overflow-hidden bg-[#F0F2F4]">
+
+                    {product.image_url ? (
+
+                      <img
+                        src={product.image_url}
+                        alt={
+                          product.title ||
+                          "AR Woodworks furniture"
+                        }
+                        loading="lazy"
+                        className="
+                          h-full
+                          w-full
+                          object-cover
+                          transition
+                          duration-500
+                          group-hover:scale-[1.03]
+                        "
+                      />
+
+                    ) : (
+
+                      <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                        No Image
+                      </div>
+
+                    )}
+
+                    {/* CATEGORY */}
+
+                    {product.category && (
+
+                      <span
+                        className="
+                          absolute
+                          left-2.5
+                          top-2.5
+                          max-w-[80%]
+                          truncate
+                          rounded-md
+                          bg-white/95
+                          px-2.5
+                          py-1.5
+                          text-[9px]
+                          font-bold
+                          text-[#079FC0]
+                          shadow-sm
+                          backdrop-blur-sm
+                          sm:text-[10px]
+                        "
+                      >
+                        {product.category}
+                      </span>
+
+                    )}
+
+                    {/* VIEW PRODUCT */}
+
+                    <span
+                      className="
+                        absolute
+                        bottom-2.5
+                        right-2.5
+                        flex
+                        h-8
+                        w-8
+                        items-center
+                        justify-center
+                        rounded-full
+                        bg-white
+                        text-[#14283D]
+                        shadow-md
+                        transition
+                        group-hover:bg-[#079FC0]
+                        group-hover:text-white
+                      "
+                    >
+                      <ArrowUpRight size={16} />
+                    </span>
+
+                  </div>
+
+                  {/* PRODUCT INFO */}
+
+                  <div className="flex flex-1 flex-col p-3 sm:p-4">
+
+                    <h3 className="truncate text-xs font-bold text-[#14283D] sm:text-base">
+                      {product.title}
+                    </h3>
+
+                    <p
+                      className="
+                        mt-1.5
+                        line-clamp-2
+                        min-h-[32px]
+                        text-[10px]
+                        leading-4
+                        text-slate-500
+                        sm:mt-2
+                        sm:min-h-[40px]
+                        sm:text-sm
+                        sm:leading-5
+                      "
+                    >
+                      {product.description ||
+                        "Premium furniture crafted with quality materials and attention to detail."}
+                    </p>
+
+                    {/* PRICE */}
+
+                    <p className="mt-3 text-xs font-bold text-[#079FC0] sm:text-base">
+                      {formatPrice(product.price)}
+                    </p>
+
+                    {/* DELIVERY */}
+
+                    <div
+                      className="
+                        mt-3
+                        flex
+                        min-h-[34px]
+                        items-center
+                        gap-2
+                        rounded-lg
+                        bg-[#F4F8FA]
+                        px-2.5
+                        py-2
+                        sm:mt-4
+                        sm:px-3
+                      "
+                    >
+
+                      <Truck
+                        size={14}
+                        strokeWidth={1.8}
+                        className="shrink-0 text-[#079FC0]"
+                      />
+
+                      <span
+                        className="
+                          line-clamp-2
+                          text-[9px]
+                          font-medium
+                          leading-3.5
+                          text-slate-600
+                          sm:text-[11px]
+                          sm:leading-4
+                        "
+                      >
+                        {product.delivery ||
+                          "Delivery available across Pakistan"}
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                </Link>
+
+                {/* ==================================================
+                    ACTION BUTTONS
+                =================================================== */}
+
+                <div
+                  className="
+                    grid
+                    grid-cols-[1fr_38px]
+                    gap-2
+                    px-3
+                    pb-3
+                    sm:grid-cols-[1fr_42px]
+                    sm:px-4
+                    sm:pb-4
+                  "
+                >
+
+                  {/* ADD TO CART */}
+
+                  <button
+                    type="button"
+                    onClick={() => addToCart(product)}
+                    className={`
+                      flex
+                      min-h-9
+                      items-center
+                      justify-center
+                      gap-1.5
+                      rounded-lg
+                      px-2
+                      py-2.5
+                      text-[10px]
+                      font-semibold
+                      text-white
+                      transition
+                      sm:min-h-10
+                      sm:text-sm
+                      ${
+                        addedId === product.id
+                          ? "bg-emerald-600"
+                          : "bg-[#14283D] hover:bg-[#079FC0]"
+                      }
+                    `}
+                  >
+
+                    {addedId === product.id ? (
+                      "Added"
+                    ) : (
+                      <>
+                        <ShoppingBag size={14} />
+                        <span>Add to Cart</span>
+                      </>
+                    )}
+
+                  </button>
+
+                  {/* WHATSAPP */}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      whatsappInquiry(product)
+                    }
+                    aria-label={`WhatsApp inquiry for ${product.title}`}
+                    className="
+                      flex
+                      min-h-9
+                      items-center
+                      justify-center
+                      rounded-lg
+                      border
+                      border-green-200
+                      bg-green-50
+                      text-green-700
+                      transition
+                      hover:bg-green-600
+                      hover:text-white
+                      sm:min-h-10
+                    "
+                  >
+                    <MessageCircle size={17} />
+                  </button>
+
+                </div>
+
+              </article>
+
+            ))}
 
           </div>
 
         )}
 
-      </div>
+      </section>
 
-      {/* ======================================================
-          FLYING IMAGE
-      ====================================================== */}
-
-      {flyingItem && (
-        <div
-          key={flyingItem.id}
-          data-cart-flying-image
-          className="cart-fly-image"
-          style={{
-            width: flyingItem.size,
-            height: flyingItem.size,
-            transform: `translate(${
-              flyingItem.startX -
-              flyingItem.size / 2
-            }px, ${
-              flyingItem.startY -
-              flyingItem.size / 2
-            }px)`,
-          }}
-        >
-
-          <img
-            src={flyingItem.image}
-            alt=""
-            draggable="false"
-            decoding="async"
-            className="h-full w-full rounded-xl object-cover"
-          />
-
-        </div>
-      )}
-
-      {/* ======================================================
-          FULL IMAGE PREVIEW
-      ====================================================== */}
-
-      {preview && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071522]/85 p-2 backdrop-blur-sm sm:p-5"
-          onClick={() => setPreview(null)}
-        >
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${preview.title} image preview`}
-            className="relative flex max-h-[95dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-
-            {/* HEADER */}
-
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 sm:px-6 sm:py-3">
-
-              <div className="min-w-0">
-
-                <p className="truncate text-xs font-bold sm:text-base">
-                  {preview.title}
-                </p>
-
-                <p className="mt-0.5 text-[10px] text-slate-500 sm:text-xs">
-                  {preview.category}
-                </p>
-
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setPreview(null)
-                }
-                aria-label="Close image preview"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 transition hover:bg-[#14283D] hover:text-white sm:h-9 sm:w-9"
-              >
-
-                <X size={18} />
-
-              </button>
-
-            </div>
-
-            {/* IMAGE */}
-
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-50 p-2 sm:p-5">
-
-              {preview.image ? (
-                <img
-                  src={preview.image}
-                  alt={preview.title}
-                  loading="eager"
-                  decoding="async"
-                  className="max-h-[72dvh] max-w-full object-contain"
-                />
-              ) : (
-                <p className="text-sm text-slate-500">
-                  Image unavailable
-                </p>
-              )}
-
-            </div>
-
-            {/* FOOTER */}
-
-            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 px-3 py-2.5 sm:px-6 sm:py-3">
-
-              <div className="min-w-0">
-
-                {formatPrice(
-                  preview.price
-                ) && (
-                  <p className="truncate text-xs font-bold text-[#14283D] sm:text-sm">
-                    {formatPrice(
-                      preview.price
-                    )}
-                  </p>
-                )}
-
-                <p className="text-[9px] text-slate-500 sm:text-xs">
-                  Full image preview
-                </p>
-
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  openWhatsApp(preview)
-                }
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#079FC0] px-2.5 py-2 text-[10px] font-semibold text-white transition hover:bg-[#087F99] sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm"
-              >
-
-                <MessageCircle
-                  size={14}
-                  className="sm:h-4 sm:w-4"
-                />
-
-                <span className="hidden sm:inline">
-                  Inquire on WhatsApp
-                </span>
-
-                <span className="sm:hidden">
-                  WhatsApp
-                </span>
-
-              </button>
-
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
-    </section>
-    </>
-
+    </main>
   );
 }

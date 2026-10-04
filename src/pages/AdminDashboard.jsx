@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 
 import {
   LayoutDashboard,
+  FolderPlus,
   Package,
   ExternalLink,
   LogOut,
@@ -31,6 +32,8 @@ import {
   Trash2,
   User,
   Quote,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
@@ -41,11 +44,41 @@ import { supabase } from "../lib/supabase";
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] =
+    useState(true);
 
-  const [error, setError] = useState("");
+  const [categorySaving, setCategorySaving] =
+    useState(false);
+
+  const [categoryDeleting, setCategoryDeleting] =
+    useState(null);
+
+  const [categoryEditing, setCategoryEditing] =
+    useState(false);
+
+  const [editingCategoryId, setEditingCategoryId] =
+    useState(null);
+
+  const [categoryForm, setCategoryForm] = useState({
+    name: "",
+    sort_order: 0,
+    enabled: true,
+  });
+
+  const [categoryError, setCategoryError] =
+    useState("");
+
+  const [categorySuccess, setCategorySuccess] =
+    useState("");
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   const [mobileSidebar, setMobileSidebar] =
     useState(false);
@@ -54,8 +87,34 @@ const AdminDashboard = () => {
   // ANNOUNCEMENT STATE
   // ==========================================================
 
+  /*
+    Announcement structure:
+
+    {
+      id: 1,
+      enabled: true,
+      announcements: [
+        {
+          id: "announcement-1",
+          text: "Azadi Mubarak 🇵🇰",
+          enabled: true,
+          order: 1
+        },
+        {
+          id: "announcement-2",
+          text: "Free Delivery All Over Pakistan",
+          enabled: true,
+          order: 2
+        }
+      ]
+    }
+  */
+
   const [announcement, setAnnouncement] =
     useState(null);
+
+  const [announcementMessages, setAnnouncementMessages] =
+    useState([]);
 
   const [announcementMessage, setAnnouncementMessage] =
     useState("");
@@ -69,8 +128,21 @@ const AdminDashboard = () => {
   const [announcementSaving, setAnnouncementSaving] =
     useState(false);
 
+  const [announcementDeleting, setAnnouncementDeleting] =
+    useState(null);
+
   const [announcementEditing, setAnnouncementEditing] =
     useState(false);
+
+  const [editingAnnouncementId, setEditingAnnouncementId] =
+    useState(null);
+
+  const [announcementForm, setAnnouncementForm] =
+    useState({
+      text: "",
+      enabled: true,
+      order: 0,
+    });
 
   const [announcementError, setAnnouncementError] =
     useState("");
@@ -79,10 +151,288 @@ const AdminDashboard = () => {
     useState("");
 
   // ==========================================================
+  // CREATE CATEGORY SLUG
+  // ==========================================================
+
+  const createCategorySlug = (name) => {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  };
+
+  // ==========================================================
+  // RESET CATEGORY FORM
+  // ==========================================================
+
+  const resetCategoryForm = () => {
+    setCategoryForm({
+      name: "",
+      sort_order: categories.length,
+      enabled: true,
+    });
+
+    setCategoryEditing(false);
+    setEditingCategoryId(null);
+    setCategoryError("");
+  };
+
+  // ==========================================================
+  // START ADD CATEGORY
+  // ==========================================================
+
+  const startAddCategory = () => {
+    setCategoryForm({
+      name: "",
+      sort_order: categories.length,
+      enabled: true,
+    });
+
+    setEditingCategoryId(null);
+    setCategoryEditing(true);
+    setCategoryError("");
+    setCategorySuccess("");
+  };
+
+  // ==========================================================
+  // START EDIT CATEGORY
+  // ==========================================================
+
+  const startEditCategory = (category) => {
+    setCategoryForm({
+      name: category.name || "",
+      sort_order:
+        Number(category.sort_order) || 0,
+      enabled:
+        category.enabled ?? true,
+    });
+
+    setEditingCategoryId(category.id);
+    setCategoryEditing(true);
+    setCategoryError("");
+    setCategorySuccess("");
+  };
+
+  // ==========================================================
+  // SAVE CATEGORY
+  // ==========================================================
+
+  const handleSaveCategory = async () => {
+    const name =
+      categoryForm.name.trim();
+
+    if (!name) {
+      setCategoryError(
+        "Please enter category name."
+      );
+      return;
+    }
+
+    const slug =
+      createCategorySlug(name);
+
+    if (!slug) {
+      setCategoryError(
+        "Please enter a valid category name."
+      );
+      return;
+    }
+
+    try {
+      setCategorySaving(true);
+      setCategoryError("");
+      setCategorySuccess("");
+
+      const payload = {
+        name,
+        slug,
+        sort_order:
+          Number(categoryForm.sort_order) || 0,
+        enabled:
+          categoryForm.enabled,
+        updated_at:
+          new Date().toISOString(),
+      };
+
+      let data;
+      let supabaseError;
+
+      if (editingCategoryId) {
+        const response = await supabase
+          .from("categories")
+          .update(payload)
+          .eq("id", editingCategoryId)
+          .select()
+          .single();
+
+        data = response.data;
+        supabaseError =
+          response.error;
+      } else {
+        const response = await supabase
+          .from("categories")
+          .insert({
+            ...payload,
+            created_at:
+              new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        data = response.data;
+        supabaseError =
+          response.error;
+      }
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+
+      if (editingCategoryId) {
+        setCategories((current) =>
+          current.map((item) =>
+            item.id === editingCategoryId
+              ? data
+              : item
+          )
+        );
+
+        setCategorySuccess(
+          "Category updated successfully."
+        );
+      } else {
+        setCategories((current) => [
+          ...current,
+          data,
+        ]);
+
+        setCategorySuccess(
+          "Category added successfully."
+        );
+      }
+
+      setCategoryEditing(false);
+      setEditingCategoryId(null);
+
+      setCategoryForm({
+        name: "",
+        sort_order: 0,
+        enabled: true,
+      });
+
+      setTimeout(() => {
+        setCategorySuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Save category error:",
+        err
+      );
+
+      if (
+        err?.code === "23505"
+      ) {
+        setCategoryError(
+          "A category with this name already exists."
+        );
+      } else {
+        setCategoryError(
+          err?.message ||
+            "Unable to save category."
+        );
+      }
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  // ==========================================================
+  // DELETE CATEGORY
+  // ==========================================================
+
+  const handleDeleteCategory = async (
+    category
+  ) => {
+    const categoryProducts =
+      products.filter(
+        (product) =>
+          product.category ===
+          category.name
+      );
+
+    if (categoryProducts.length > 0) {
+      setCategoryError(
+        `Cannot delete "${category.name}" because ${categoryProducts.length} product(s) are using this category. Move those products to another category first.`
+      );
+
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Delete category "${category.name}"?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setCategoryDeleting(
+        category.id
+      );
+
+      setCategoryError("");
+      setCategorySuccess("");
+
+      const {
+        error: supabaseError,
+      } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", category.id);
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+
+      setCategories((current) =>
+        current.filter(
+          (item) =>
+            item.id !== category.id
+        )
+      );
+
+      setCategorySuccess(
+        "Category deleted successfully."
+      );
+
+      setTimeout(() => {
+        setCategorySuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Delete category error:",
+        err
+      );
+
+      setCategoryError(
+        err?.message ||
+          "Unable to delete category."
+      );
+    } finally {
+      setCategoryDeleting(null);
+    }
+  };
+
+  // ==========================================================
   // REVIEWS STATE
   // ==========================================================
 
-  const [reviews, setReviews] = useState([]);
+  const [reviews, setReviews] =
+    useState([]);
 
   const [reviewsLoading, setReviewsLoading] =
     useState(true);
@@ -105,14 +455,15 @@ const AdminDashboard = () => {
   const [editingReviewId, setEditingReviewId] =
     useState(null);
 
-  const [reviewForm, setReviewForm] = useState({
-    customer_name: "",
-    rating: 5,
-    review: "",
-    customer_image_url: "",
-    sort_order: 0,
-    enabled: true,
-  });
+  const [reviewForm, setReviewForm] =
+    useState({
+      customer_name: "",
+      rating: 5,
+      review: "",
+      customer_image_url: "",
+      sort_order: 0,
+      enabled: true,
+    });
 
   // ==========================================================
   // FETCH PRODUCTS
@@ -174,6 +525,128 @@ const AdminDashboard = () => {
   );
 
   // ==========================================================
+  // FETCH CATEGORIES
+  // ==========================================================
+
+  const fetchCategories = useCallback(
+    async () => {
+      try {
+        setCategoriesLoading(true);
+        setCategoryError("");
+
+        const {
+          data,
+          error: supabaseError,
+        } = await supabase
+          .from("categories")
+          .select(`
+            id,
+            name,
+            slug,
+            enabled,
+            sort_order,
+            created_at,
+            updated_at
+          `)
+          .order("sort_order", {
+            ascending: true,
+          })
+          .order("created_at", {
+            ascending: true,
+          });
+
+        if (supabaseError) {
+          throw supabaseError;
+        }
+
+        setCategories(data || []);
+      } catch (err) {
+        console.error(
+          "Categories error:",
+          err
+        );
+
+        setCategoryError(
+          err?.message ||
+            "Unable to load categories."
+        );
+      } finally {
+        setCategoriesLoading(false);
+      }
+    },
+    []
+  );
+
+  // ==========================================================
+  // NORMALIZE ANNOUNCEMENTS
+  // ==========================================================
+
+  const normalizeAnnouncements = (
+    items
+  ) => {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+
+    return items
+      .map((item, index) => {
+        if (typeof item === "string") {
+          const text =
+            item.trim();
+
+          if (!text) {
+            return null;
+          }
+
+          return {
+            id: `announcement-${index + 1}`,
+            text,
+            enabled: true,
+            order: index + 1,
+          };
+        }
+
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const text =
+          typeof item.text === "string"
+            ? item.text.trim()
+            : "";
+
+        if (!text) {
+          return null;
+        }
+
+        return {
+          id:
+            item.id ??
+            `announcement-${index + 1}`,
+
+          text,
+
+          enabled:
+            item.enabled !== false,
+
+          order:
+            Number(item.order) ||
+            index + 1,
+        };
+      })
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          Number(a.order) -
+          Number(b.order)
+      )
+      .map((item, index) => ({
+        ...item,
+        order: index + 1,
+      }));
+  };
+
+  // ==========================================================
   // FETCH ANNOUNCEMENT
   // ==========================================================
 
@@ -192,10 +665,7 @@ const AdminDashboard = () => {
             id,
             enabled,
             message,
-            button_text,
-            button_url,
-            variant,
-            dismissible,
+            announcements,
             updated_at
           `)
           .eq("id", 1)
@@ -205,17 +675,71 @@ const AdminDashboard = () => {
           throw supabaseError;
         }
 
+        // ------------------------------------------------------
+        // NO ANNOUNCEMENT ROW
+        // ------------------------------------------------------
+
         if (!data) {
           setAnnouncement(null);
+
+          setAnnouncementMessages([]);
+
           setAnnouncementMessage("");
+
           setAnnouncementActive(false);
+
           return;
+        }
+
+        // ------------------------------------------------------
+        // NORMAL ANNOUNCEMENTS
+        // ------------------------------------------------------
+
+        let messages = [];
+
+        if (
+          Array.isArray(
+            data.announcements
+          )
+        ) {
+          messages =
+            normalizeAnnouncements(
+              data.announcements
+            );
+        }
+
+        // ------------------------------------------------------
+        // OLD SINGLE MESSAGE FALLBACK
+        //
+        // This keeps old announcement data working.
+        // ------------------------------------------------------
+
+        if (
+          messages.length === 0 &&
+          typeof data.message === "string" &&
+          data.message.trim() !== ""
+        ) {
+          messages = [
+            {
+              id: "announcement-1",
+              text:
+                data.message.trim(),
+              enabled: true,
+              order: 1,
+            },
+          ];
         }
 
         setAnnouncement(data);
 
+        setAnnouncementMessages(
+          messages
+        );
+
         setAnnouncementMessage(
-          data.message || ""
+          messages[0]?.text ||
+            data.message ||
+            ""
         );
 
         setAnnouncementActive(
@@ -299,10 +823,12 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
     fetchAnnouncement();
     fetchReviews();
   }, [
     fetchProducts,
+    fetchCategories,
     fetchAnnouncement,
     fetchReviews,
   ]);
@@ -379,14 +905,74 @@ const AdminDashboard = () => {
   };
 
   // ==========================================================
+  // RESET ANNOUNCEMENT FORM
+  // ==========================================================
+
+  const resetAnnouncementForm = () => {
+    setAnnouncementForm({
+      text: "",
+      enabled: true,
+      order:
+        announcementMessages.length + 1,
+    });
+
+    setAnnouncementEditing(false);
+    setEditingAnnouncementId(null);
+    setAnnouncementError("");
+  };
+
+  // ==========================================================
+  // START ADD ANNOUNCEMENT
+  // ==========================================================
+
+  const startAddAnnouncement = () => {
+    setAnnouncementForm({
+      text: "",
+      enabled: true,
+      order:
+        announcementMessages.length + 1,
+    });
+
+    setEditingAnnouncementId(null);
+    setAnnouncementEditing(true);
+    setAnnouncementError("");
+    setAnnouncementSuccess("");
+  };
+
+  // ==========================================================
+  // START EDIT ANNOUNCEMENT
+  // ==========================================================
+
+  const startEditAnnouncement = (
+    item
+  ) => {
+    setAnnouncementForm({
+      text: item.text || "",
+      enabled:
+        item.enabled !== false,
+      order:
+        Number(item.order) ||
+        announcementMessages.length,
+    });
+
+    setEditingAnnouncementId(
+      item.id
+    );
+
+    setAnnouncementEditing(true);
+    setAnnouncementError("");
+    setAnnouncementSuccess("");
+  };
+
+  // ==========================================================
   // SAVE ANNOUNCEMENT
   // ==========================================================
 
   const handleSaveAnnouncement = async () => {
-    const message =
-      announcementMessage.trim();
+    const text =
+      announcementForm.text.trim();
 
-    if (!message) {
+    if (!text) {
       setAnnouncementError(
         "Please enter announcement text."
       );
@@ -398,6 +984,70 @@ const AdminDashboard = () => {
       setAnnouncementError("");
       setAnnouncementSuccess("");
 
+      let updatedMessages = [
+        ...announcementMessages,
+      ];
+
+      // ------------------------------------------------------
+      // UPDATE EXISTING ANNOUNCEMENT
+      // ------------------------------------------------------
+
+      if (editingAnnouncementId) {
+        updatedMessages =
+          updatedMessages.map(
+            (item) =>
+              item.id ===
+              editingAnnouncementId
+                ? {
+                    ...item,
+                    text,
+                    enabled:
+                      announcementForm.enabled,
+                    order:
+                      Number(
+                        announcementForm.order
+                      ) || item.order,
+                  }
+                : item
+          );
+      }
+
+      // ------------------------------------------------------
+      // ADD NEW ANNOUNCEMENT
+      // ------------------------------------------------------
+
+      else {
+        const newAnnouncement = {
+          id: `announcement-${Date.now()}`,
+          text,
+          enabled:
+            announcementForm.enabled,
+          order:
+            Number(
+              announcementForm.order
+            ) ||
+            updatedMessages.length + 1,
+        };
+
+        updatedMessages = [
+          ...updatedMessages,
+          newAnnouncement,
+        ];
+      }
+
+      // ------------------------------------------------------
+      // NORMALIZE ORDER
+      // ------------------------------------------------------
+
+      updatedMessages =
+        normalizeAnnouncements(
+          updatedMessages
+        );
+
+      // ------------------------------------------------------
+      // SAVE TO SUPABASE
+      // ------------------------------------------------------
+
       const {
         data,
         error: supabaseError,
@@ -406,9 +1056,19 @@ const AdminDashboard = () => {
         .upsert(
           {
             id: 1,
-            message,
+
             enabled:
               announcementActive,
+
+            // Keep old message field compatible
+            message:
+              updatedMessages[0]?.text ||
+              "",
+
+            // New multiple announcement data
+            announcements:
+              updatedMessages,
+
             updated_at:
               new Date().toISOString(),
           },
@@ -423,10 +1083,23 @@ const AdminDashboard = () => {
         throw supabaseError;
       }
 
+      // ------------------------------------------------------
+      // UPDATE LOCAL STATE
+      // ------------------------------------------------------
+
       setAnnouncement(data);
 
+      setAnnouncementMessages(
+        normalizeAnnouncements(
+          data.announcements ||
+            updatedMessages
+        )
+      );
+
       setAnnouncementMessage(
-        data.message || ""
+        data.message ||
+          updatedMessages[0]?.text ||
+          ""
       );
 
       setAnnouncementActive(
@@ -434,9 +1107,19 @@ const AdminDashboard = () => {
       );
 
       setAnnouncementEditing(false);
+      setEditingAnnouncementId(null);
+
+      setAnnouncementForm({
+        text: "",
+        enabled: true,
+        order:
+          updatedMessages.length + 1,
+      });
 
       setAnnouncementSuccess(
-        "Announcement updated successfully."
+        editingAnnouncementId
+          ? "Announcement updated successfully."
+          : "Announcement added successfully."
       );
 
       setTimeout(() => {
@@ -458,16 +1141,421 @@ const AdminDashboard = () => {
   };
 
   // ==========================================================
-  // TOGGLE ANNOUNCEMENT
+  // DELETE ANNOUNCEMENT
+  // ==========================================================
+
+  const handleDeleteAnnouncement = async (
+    item
+  ) => {
+    const confirmed =
+      window.confirm(
+        `Delete announcement "${item.text}"?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setAnnouncementDeleting(
+        item.id
+      );
+
+      setAnnouncementError("");
+      setAnnouncementSuccess("");
+
+      let updatedMessages =
+        announcementMessages.filter(
+          (announcementItem) =>
+            announcementItem.id !==
+            item.id
+        );
+
+      // ------------------------------------------------------
+      // RESET ORDER AFTER DELETE
+      // ------------------------------------------------------
+
+      updatedMessages =
+        updatedMessages.map(
+          (announcementItem, index) => ({
+            ...announcementItem,
+            order: index + 1,
+          })
+        );
+
+      // ------------------------------------------------------
+      // SAVE UPDATED LIST
+      // ------------------------------------------------------
+
+      const {
+        data,
+        error: supabaseError,
+      } = await supabase
+        .from("announcement_bar")
+        .upsert(
+          {
+            id: 1,
+
+            enabled:
+              announcementActive,
+
+            message:
+              updatedMessages[0]?.text ||
+              "",
+
+            announcements:
+              updatedMessages,
+
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict: "id",
+          }
+        )
+        .select()
+        .single();
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+
+      setAnnouncement(data);
+
+      setAnnouncementMessages(
+        updatedMessages
+      );
+
+      setAnnouncementMessage(
+        updatedMessages[0]?.text ||
+          ""
+      );
+
+      setAnnouncementSuccess(
+        "Announcement deleted successfully."
+      );
+
+      // If currently editing deleted item
+      if (
+        editingAnnouncementId ===
+        item.id
+      ) {
+        resetAnnouncementForm();
+      }
+
+      setTimeout(() => {
+        setAnnouncementSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Delete announcement error:",
+        err
+      );
+
+      setAnnouncementError(
+        err?.message ||
+          "Unable to delete announcement."
+      );
+    } finally {
+      setAnnouncementDeleting(null);
+    }
+  };
+
+  // ==========================================================
+  // TOGGLE SINGLE ANNOUNCEMENT
+  // ==========================================================
+
+  const handleToggleAnnouncementItem =
+    async (item) => {
+      try {
+        setAnnouncementSaving(true);
+        setAnnouncementError("");
+        setAnnouncementSuccess("");
+
+        const updatedMessages =
+          announcementMessages.map(
+            (announcementItem) =>
+              announcementItem.id ===
+              item.id
+                ? {
+                    ...announcementItem,
+                    enabled:
+                      !announcementItem.enabled,
+                  }
+                : announcementItem
+          );
+
+        const {
+          data,
+          error: supabaseError,
+        } = await supabase
+          .from("announcement_bar")
+          .upsert(
+            {
+              id: 1,
+
+              enabled:
+                announcementActive,
+
+              message:
+                updatedMessages[0]?.text ||
+                "",
+
+              announcements:
+                updatedMessages,
+
+              updated_at:
+                new Date().toISOString(),
+            },
+            {
+              onConflict: "id",
+            }
+          )
+          .select()
+          .single();
+
+        if (supabaseError) {
+          throw supabaseError;
+        }
+
+        setAnnouncement(data);
+
+        setAnnouncementMessages(
+          normalizeAnnouncements(
+            data.announcements ||
+              updatedMessages
+          )
+        );
+
+        setAnnouncementSuccess(
+          item.enabled
+            ? "Announcement hidden."
+            : "Announcement is now visible."
+        );
+
+        setTimeout(() => {
+          setAnnouncementSuccess("");
+        }, 3000);
+      } catch (err) {
+        console.error(
+          "Toggle announcement item error:",
+          err
+        );
+
+        setAnnouncementError(
+          err?.message ||
+            "Unable to update announcement."
+        );
+      } finally {
+        setAnnouncementSaving(false);
+      }
+    };
+
+  // ==========================================================
+  // MOVE ANNOUNCEMENT UP
+  // ==========================================================
+
+  const handleMoveAnnouncementUp = async (
+    index
+  ) => {
+    if (index <= 0) {
+      return;
+    }
+
+    try {
+      setAnnouncementSaving(true);
+      setAnnouncementError("");
+      setAnnouncementSuccess("");
+
+      const updatedMessages = [
+        ...announcementMessages,
+      ];
+
+      [
+        updatedMessages[index - 1],
+        updatedMessages[index],
+      ] = [
+        updatedMessages[index],
+        updatedMessages[index - 1],
+      ];
+
+      const reordered =
+        updatedMessages.map(
+          (item, itemIndex) => ({
+            ...item,
+            order:
+              itemIndex + 1,
+          })
+        );
+
+      const {
+        data,
+        error: supabaseError,
+      } = await supabase
+        .from("announcement_bar")
+        .upsert(
+          {
+            id: 1,
+
+            enabled:
+              announcementActive,
+
+            message:
+              reordered[0]?.text ||
+              "",
+
+            announcements:
+              reordered,
+
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict: "id",
+          }
+        )
+        .select()
+        .single();
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+
+      setAnnouncement(data);
+
+      setAnnouncementMessages(
+        reordered
+      );
+
+      setAnnouncementSuccess(
+        "Announcement order updated."
+      );
+
+      setTimeout(() => {
+        setAnnouncementSuccess("");
+      }, 2000);
+    } catch (err) {
+      console.error(
+        "Move announcement up error:",
+        err
+      );
+
+      setAnnouncementError(
+        err?.message ||
+          "Unable to change announcement order."
+      );
+    } finally {
+      setAnnouncementSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // MOVE ANNOUNCEMENT DOWN
+  // ==========================================================
+
+  const handleMoveAnnouncementDown = async (
+    index
+  ) => {
+    if (
+      index >=
+      announcementMessages.length - 1
+    ) {
+      return;
+    }
+
+    try {
+      setAnnouncementSaving(true);
+      setAnnouncementError("");
+      setAnnouncementSuccess("");
+
+      const updatedMessages = [
+        ...announcementMessages,
+      ];
+
+      [
+        updatedMessages[index],
+        updatedMessages[index + 1],
+      ] = [
+        updatedMessages[index + 1],
+        updatedMessages[index],
+      ];
+
+      const reordered =
+        updatedMessages.map(
+          (item, itemIndex) => ({
+            ...item,
+            order:
+              itemIndex + 1,
+          })
+        );
+
+      const {
+        data,
+        error: supabaseError,
+      } = await supabase
+        .from("announcement_bar")
+        .upsert(
+          {
+            id: 1,
+
+            enabled:
+              announcementActive,
+
+            message:
+              reordered[0]?.text ||
+              "",
+
+            announcements:
+              reordered,
+
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict: "id",
+          }
+        )
+        .select()
+        .single();
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+
+      setAnnouncement(data);
+
+      setAnnouncementMessages(
+        reordered
+      );
+
+      setAnnouncementSuccess(
+        "Announcement order updated."
+      );
+
+      setTimeout(() => {
+        setAnnouncementSuccess("");
+      }, 2000);
+    } catch (err) {
+      console.error(
+        "Move announcement down error:",
+        err
+      );
+
+      setAnnouncementError(
+        err?.message ||
+          "Unable to change announcement order."
+      );
+    } finally {
+      setAnnouncementSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // TOGGLE WHOLE ANNOUNCEMENT BAR
   // ==========================================================
 
   const handleToggleAnnouncement =
     async () => {
-      if (!announcement?.id) {
-        setAnnouncementEditing(true);
-        return;
-      }
-
       try {
         setAnnouncementSaving(true);
         setAnnouncementError("");
@@ -481,12 +1569,28 @@ const AdminDashboard = () => {
           error: supabaseError,
         } = await supabase
           .from("announcement_bar")
-          .update({
-            enabled: newStatus,
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq("id", 1)
+          .upsert(
+            {
+              id: 1,
+
+              enabled:
+                newStatus,
+
+              message:
+                announcementMessages[0]
+                  ?.text ||
+                "",
+
+              announcements:
+                announcementMessages,
+
+              updated_at:
+                new Date().toISOString(),
+            },
+            {
+              onConflict: "id",
+            }
+          )
           .select()
           .single();
 
@@ -496,18 +1600,29 @@ const AdminDashboard = () => {
 
         setAnnouncement(data);
 
-        setAnnouncementMessage(
-          data.message || ""
+        setAnnouncementActive(
+          data.enabled ??
+            newStatus
         );
 
-        setAnnouncementActive(
-          data.enabled ?? newStatus
+        setAnnouncementMessages(
+          normalizeAnnouncements(
+            data.announcements ||
+              announcementMessages
+          )
+        );
+
+        setAnnouncementMessage(
+          data.message ||
+            announcementMessages[0]
+              ?.text ||
+            ""
         );
 
         setAnnouncementSuccess(
           newStatus
-            ? "Announcement is now visible."
-            : "Announcement has been hidden."
+            ? "Announcement bar is now visible."
+            : "Announcement bar has been hidden."
         );
 
         setTimeout(() => {
@@ -557,7 +1672,8 @@ const AdminDashboard = () => {
       rating: 5,
       review: "",
       customer_image_url: "",
-      sort_order: reviews.length,
+      sort_order:
+        reviews.length,
       enabled: true,
     });
 
@@ -571,23 +1687,40 @@ const AdminDashboard = () => {
   // START EDIT REVIEW
   // ==========================================================
 
-  const startEditReview = (review) => {
+  const startEditReview = (
+    review
+  ) => {
     setReviewForm({
       customer_name:
-        review.customer_name || "",
+        review.customer_name ||
+        "",
+
       rating:
-        Number(review.rating) || 5,
+        Number(review.rating) ||
+        5,
+
       review:
-        review.review || "",
+        review.review ||
+        "",
+
       customer_image_url:
-        review.customer_image_url || "",
+        review.customer_image_url ||
+        "",
+
       sort_order:
-        Number(review.sort_order) || 0,
+        Number(
+          review.sort_order
+        ) || 0,
+
       enabled:
-        review.enabled ?? true,
+        review.enabled ??
+        true,
     });
 
-    setEditingReviewId(review.id);
+    setEditingReviewId(
+      review.id
+    );
+
     setReviewEditing(true);
     setReviewError("");
     setReviewSuccess("");
@@ -608,7 +1741,9 @@ const AdminDashboard = () => {
       5,
       Math.max(
         1,
-        Number(reviewForm.rating) || 5
+        Number(
+          reviewForm.rating
+        ) || 5
       )
     );
 
@@ -632,16 +1767,26 @@ const AdminDashboard = () => {
       setReviewSuccess("");
 
       const payload = {
-        customer_name: customerName,
+        customer_name:
+          customerName,
+
         rating,
-        review: reviewText,
+
+        review:
+          reviewText,
+
         customer_image_url:
           reviewForm.customer_image_url.trim() ||
           null,
+
         sort_order:
-          Number(reviewForm.sort_order) || 0,
+          Number(
+            reviewForm.sort_order
+          ) || 0,
+
         enabled:
           reviewForm.enabled,
+
         updated_at:
           new Date().toISOString(),
       };
@@ -650,28 +1795,38 @@ const AdminDashboard = () => {
       let supabaseError;
 
       if (editingReviewId) {
-        const response = await supabase
-          .from("reviews")
-          .update(payload)
-          .eq("id", editingReviewId)
-          .select()
-          .single();
+        const response =
+          await supabase
+            .from("reviews")
+            .update(payload)
+            .eq(
+              "id",
+              editingReviewId
+            )
+            .select()
+            .single();
 
-        data = response.data;
+        data =
+          response.data;
+
         supabaseError =
           response.error;
       } else {
-        const response = await supabase
-          .from("reviews")
-          .insert({
-            ...payload,
-            created_at:
-              new Date().toISOString(),
-          })
-          .select()
-          .single();
+        const response =
+          await supabase
+            .from("reviews")
+            .insert({
+              ...payload,
 
-        data = response.data;
+              created_at:
+                new Date().toISOString(),
+            })
+            .select()
+            .single();
+
+        data =
+          response.data;
+
         supabaseError =
           response.error;
       }
@@ -682,10 +1837,12 @@ const AdminDashboard = () => {
 
       if (editingReviewId) {
         setReviews((current) =>
-          current.map((item) =>
-            item.id === editingReviewId
-              ? data
-              : item
+          current.map(
+            (item) =>
+              item.id ===
+              editingReviewId
+                ? data
+                : item
           )
         );
 
@@ -753,7 +1910,10 @@ const AdminDashboard = () => {
     }
 
     try {
-      setReviewDeleting(review.id);
+      setReviewDeleting(
+        review.id
+      );
+
       setReviewError("");
       setReviewSuccess("");
 
@@ -771,12 +1931,14 @@ const AdminDashboard = () => {
       setReviews((current) =>
         current.filter(
           (item) =>
-            item.id !== review.id
+            item.id !==
+            review.id
         )
       );
 
       if (
-        editingReviewId === review.id
+        editingReviewId ===
+        review.id
       ) {
         resetReviewForm();
       }
@@ -822,11 +1984,16 @@ const AdminDashboard = () => {
       } = await supabase
         .from("reviews")
         .update({
-          enabled: newStatus,
+          enabled:
+            newStatus,
+
           updated_at:
             new Date().toISOString(),
         })
-        .eq("id", review.id)
+        .eq(
+          "id",
+          review.id
+        )
         .select()
         .single();
 
@@ -835,10 +2002,12 @@ const AdminDashboard = () => {
       }
 
       setReviews((current) =>
-        current.map((item) =>
-          item.id === review.id
-            ? data
-            : item
+        current.map(
+          (item) =>
+            item.id ===
+            review.id
+              ? data
+              : item
         )
       );
 
@@ -889,24 +2058,27 @@ const AdminDashboard = () => {
     const featuredProducts =
       products.filter(
         (product) =>
-          product.featured === true
+          product.featured ===
+          true
       ).length;
 
-    const categories = new Set(
-      products
-        .map(
-          (product) =>
-            product.category
-        )
-        .filter(Boolean)
-    );
+    const productCategories =
+      new Set(
+        products
+          .map(
+            (product) =>
+              product.category
+          )
+          .filter(Boolean)
+      );
 
     const totalValue =
       products.reduce(
         (total, product) => {
-          const price = Number(
-            product.price
-          );
+          const price =
+            Number(
+              product.price
+            );
 
           if (
             Number.isNaN(price)
@@ -925,13 +2097,15 @@ const AdminDashboard = () => {
     const publishedReviews =
       reviews.filter(
         (review) =>
-          review.enabled === true
+          review.enabled ===
+          true
       ).length;
 
     const hiddenReviews =
       reviews.filter(
         (review) =>
-          review.enabled !== true
+          review.enabled !==
+          true
       ).length;
 
     return {
@@ -940,13 +2114,16 @@ const AdminDashboard = () => {
       inactiveProducts,
       featuredProducts,
       categories:
-        categories.size,
+        productCategories.size,
       totalValue,
       totalReviews,
       publishedReviews,
       hiddenReviews,
     };
-  }, [products, reviews]);
+  }, [
+    products,
+    reviews,
+  ]);
 
   // ==========================================================
   // RECENT PRODUCTS
@@ -954,7 +2131,10 @@ const AdminDashboard = () => {
 
   const recentProducts =
     useMemo(() => {
-      return products.slice(0, 6);
+      return products.slice(
+        0,
+        6
+      );
     }, [products]);
 
   // ==========================================================
@@ -963,7 +2143,10 @@ const AdminDashboard = () => {
 
   const recentReviews =
     useMemo(() => {
-      return reviews.slice(0, 5);
+      return reviews.slice(
+        0,
+        5
+      );
     }, [reviews]);
 
   // ==========================================================
@@ -972,7 +2155,8 @@ const AdminDashboard = () => {
 
   const categoryStats =
     useMemo(() => {
-      const categoryMap = {};
+      const categoryMap =
+        {};
 
       products.forEach(
         (product) => {
@@ -1013,6 +2197,8 @@ const AdminDashboard = () => {
         .slice(0, 6);
     }, [products]);
 
+
+    
   // ==========================================================
   // SIDEBAR
   // ==========================================================
@@ -1116,6 +2302,32 @@ const AdminDashboard = () => {
             </a>
           </div>
 
+<Link
+  to="/admin"
+  onClick={() => {
+    setMobileSidebar(false);
+    setTimeout(() => {
+      document
+        .getElementById(
+          "categories-management"
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 100);
+  }}
+  className="mt-1 flex items-center gap-3 rounded-md px-3 py-2.5 text-[12px] font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+>
+  <FolderPlus
+    size={16}
+    strokeWidth={1.8}
+  />
+
+  Categories
+</Link>
+
+
           <div className="mb-7">
             <p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-white/30">
               Website
@@ -1139,6 +2351,7 @@ const AdminDashboard = () => {
             </a>
           </div>
         </div>
+
 
         <div className="border-t border-white/10 p-3">
 
@@ -1284,16 +2497,18 @@ const AdminDashboard = () => {
             <div className="flex items-center gap-2">
 
               <button
-                onClick={() => {
-                  fetchProducts(true);
-                  fetchAnnouncement();
-                  fetchReviews();
-                }}
+               onClick={() => {
+  fetchProducts(true);
+  fetchCategories();
+  fetchAnnouncement();
+  fetchReviews();
+}}
                 disabled={
-                  refreshing ||
-                  announcementSaving ||
-                  reviewsLoading
-                }
+  refreshing ||
+  announcementSaving ||
+  reviewsLoading ||
+  categoriesLoading
+}
                 className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50"
               >
                 <RefreshCw
@@ -1404,359 +2619,840 @@ const AdminDashboard = () => {
             </div>
           )}
 
-          {/* ==================================================
-              ANNOUNCEMENT MANAGEMENT
-          ================================================== */}
+        {/* ==================================================
+    ANNOUNCEMENT MANAGEMENT
+================================================== */}
 
-          <section className="mb-6 border border-slate-200 bg-white">
+<section className="mb-6 border border-slate-200 bg-white">
 
-            <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+  {/* ==================================================
+      HEADER
+  ================================================== */}
 
-              <div className="flex items-start gap-3">
+  <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
 
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#0789A6]/15 bg-[#0789A6]/5 text-[#0789A6]">
-                  <Megaphone
-                    size={17}
-                    strokeWidth={1.8}
-                  />
+    <div className="flex items-start gap-3">
+
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#0789A6]/15 bg-[#0789A6]/5 text-[#0789A6]">
+        <Megaphone
+          size={17}
+          strokeWidth={1.8}
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-bold text-[#14283D]">
+          Announcement Bar
+        </h3>
+
+        <p className="mt-1 text-[10px] leading-4 text-slate-400">
+          Manage multiple announcements displayed at the top of your website.
+        </p>
+      </div>
+
+    </div>
+
+    {!announcementLoading && (
+      <span
+        className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold ${
+          announcementActive
+            ? "bg-emerald-50 text-emerald-600"
+            : "bg-slate-100 text-slate-500"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            announcementActive
+              ? "bg-emerald-500"
+              : "bg-slate-400"
+          }`}
+        />
+
+        {announcementActive
+          ? "Visible"
+          : "Hidden"}
+      </span>
+    )}
+
+  </div>
+
+  {/* ==================================================
+      CONTENT
+  ================================================== */}
+
+  <div className="p-4 sm:p-5">
+
+    {/* ==================================================
+        LOADING
+    ================================================== */}
+
+    {announcementLoading ? (
+      <div className="animate-pulse">
+
+        <div className="h-3 w-40 rounded bg-slate-100" />
+
+        <div className="mt-4 h-16 w-full rounded bg-slate-100" />
+
+        <div className="mt-3 h-16 w-full rounded bg-slate-100" />
+
+      </div>
+    ) : (
+      <>
+
+        {/* ==================================================
+            ERROR
+        ================================================== */}
+
+        {announcementError && (
+          <div className="mb-4 flex items-start gap-2 border border-red-200 bg-red-50 p-3">
+
+            <AlertCircle
+              size={14}
+              className="mt-0.5 shrink-0 text-red-500"
+            />
+
+            <p className="text-[10px] leading-4 text-red-600">
+              {announcementError}
+            </p>
+
+          </div>
+        )}
+
+        {/* ==================================================
+            SUCCESS
+        ================================================== */}
+
+        {announcementSuccess && (
+          <div className="mb-4 flex items-start gap-2 border border-emerald-200 bg-emerald-50 p-3">
+
+            <CheckCircle2
+              size={14}
+              className="mt-0.5 shrink-0 text-emerald-500"
+            />
+
+            <p className="text-[10px] leading-4 text-emerald-600">
+              {announcementSuccess}
+            </p>
+
+          </div>
+        )}
+
+        {/* ==================================================
+            TOP CONTROLS
+        ================================================== */}
+
+        <div className="mb-5 flex flex-col gap-3 border border-slate-200 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+
+            <p className="text-[11px] font-bold text-[#14283D]">
+              Announcement Messages
+            </p>
+
+            <p className="mt-1 text-[9px] leading-4 text-slate-400">
+              Messages will appear one after another automatically.
+            </p>
+
+          </div>
+
+          <button
+            type="button"
+            onClick={startAddAnnouncement}
+            disabled={announcementSaving}
+            className="flex h-9 items-center justify-center gap-2 bg-[#0789A6] px-4 text-[10px] font-bold text-white transition hover:bg-[#067d96] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={14} />
+
+            Add Announcement
+          </button>
+
+        </div>
+
+        {/* ==================================================
+            ADD / EDIT FORM
+        ================================================== */}
+
+        {announcementEditing && (
+          <div className="mb-5 border border-[#0789A6]/20 bg-[#F8FCFD]">
+
+            {/* FORM HEADER */}
+
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+
+              <div>
+
+                <p className="text-[11px] font-bold text-[#14283D]">
+                  {editingAnnouncementId
+                    ? "Edit Announcement"
+                    : "Add Announcement"}
+                </p>
+
+                <p className="mt-0.5 text-[9px] text-slate-400">
+                  Create a message for your website announcement bar.
+                </p>
+
+              </div>
+
+              <button
+                type="button"
+                onClick={resetAnnouncementForm}
+                disabled={announcementSaving}
+                className="flex h-7 w-7 items-center justify-center border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50"
+                aria-label="Close announcement form"
+              >
+                <X size={13} />
+              </button>
+
+            </div>
+
+            {/* FORM BODY */}
+
+            <div className="p-4">
+
+              {/* MESSAGE */}
+
+              <div>
+
+                <div className="mb-2 flex items-center justify-between gap-3">
+
+                  <label
+                    htmlFor="announcement-message"
+                    className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500"
+                  >
+                    Announcement Message
+                  </label>
+
+                  <span className="text-[9px] text-slate-400">
+                    {announcementForm.text.length}/160
+                  </span>
+
                 </div>
 
-                <div>
-                  <h3 className="text-sm font-bold text-[#14283D]">
-                    Announcement Bar
-                  </h3>
+                <textarea
+                  id="announcement-message"
+                  value={announcementForm.text}
+                  onChange={(e) => {
+                    if (
+                      e.target.value.length <= 160
+                    ) {
+                      setAnnouncementForm(
+                        (current) => ({
+                          ...current,
+                          text: e.target.value,
+                        })
+                      );
+                    }
+                  }}
+                  rows={3}
+                  maxLength={160}
+                  placeholder="Example: Free Delivery All Over Pakistan"
+                  className="w-full resize-none border border-slate-200 bg-white px-3 py-3 text-xs font-medium leading-5 text-[#14283D] outline-none transition placeholder:text-slate-300 focus:border-[#0789A6] focus:ring-2 focus:ring-[#0789A6]/10"
+                />
 
-                  <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                    Manage the message displayed at the top of your website.
+              </div>
+
+              {/* FORM OPTIONS */}
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                {/* ORDER */}
+
+                <div>
+
+                  <label
+                    htmlFor="announcement-order"
+                    className="mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500"
+                  >
+                    Display Order
+                  </label>
+
+                  <input
+                    id="announcement-order"
+                    type="number"
+                    min="1"
+                    value={
+                      announcementForm.order
+                    }
+                    onChange={(e) => {
+                      setAnnouncementForm(
+                        (current) => ({
+                          ...current,
+                          order:
+                            Number(
+                              e.target.value
+                            ) || 1,
+                        })
+                      );
+                    }}
+                    className="h-10 w-full border border-slate-200 bg-white px-3 text-xs font-medium text-[#14283D] outline-none transition focus:border-[#0789A6] focus:ring-2 focus:ring-[#0789A6]/10"
+                  />
+
+                  <p className="mt-1 text-[9px] text-slate-400">
+                    Lower number appears first.
                   </p>
+
+                </div>
+
+                {/* STATUS */}
+
+                <div>
+
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    Message Status
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAnnouncementForm(
+                        (current) => ({
+                          ...current,
+                          enabled:
+                            !current.enabled,
+                        })
+                      )
+                    }
+                    className="flex h-10 w-full items-center justify-between border border-slate-200 bg-white px-3"
+                  >
+
+                    <div className="flex items-center gap-2">
+
+                      {announcementForm.enabled ? (
+                        <Eye
+                          size={14}
+                          className="text-emerald-500"
+                        />
+                      ) : (
+                        <EyeOff
+                          size={14}
+                          className="text-slate-400"
+                        />
+                      )}
+
+                      <span className="text-xs font-semibold text-[#14283D]">
+                        {announcementForm.enabled
+                          ? "Active"
+                          : "Inactive"}
+                      </span>
+
+                    </div>
+
+                    <span
+                      className={`relative h-5 w-9 rounded-full transition ${
+                        announcementForm.enabled
+                          ? "bg-[#0789A6]"
+                          : "bg-slate-300"
+                      }`}
+                    >
+
+                      <span
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                          announcementForm.enabled
+                            ? "left-4"
+                            : "left-0.5"
+                        }`}
+                      />
+
+                    </span>
+
+                  </button>
+
+                  <p className="mt-1 text-[9px] text-slate-400">
+                    Inactive messages won't appear publicly.
+                  </p>
+
                 </div>
 
               </div>
 
-              {!announcementLoading && (
-                <span
-                  className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold ${
-                    announcementActive
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      announcementActive
-                        ? "bg-emerald-500"
-                        : "bg-slate-400"
-                    }`}
-                  />
+              {/* PREVIEW */}
 
-                  {announcementActive
-                    ? "Visible"
-                    : "Hidden"}
-                </span>
-              )}
+              <div className="mt-4">
+
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
+                  Preview
+                </p>
+
+                <div className="overflow-hidden border border-slate-200">
+
+                  <div className="flex min-h-[42px] items-center justify-center bg-[#14283D] px-4 py-2 text-center">
+
+                    <div className="flex items-center justify-center gap-2">
+
+                      <Megaphone
+                        size={13}
+                        className="shrink-0 text-white/70"
+                      />
+
+                      <p className="text-[10px] font-semibold leading-4 text-white sm:text-[11px]">
+                        {announcementForm.text ||
+                          "Your announcement will appear here."}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* FORM BUTTONS */}
+
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+
+                <button
+                  type="button"
+                  onClick={resetAnnouncementForm}
+                  disabled={announcementSaving}
+                  className="h-10 border border-slate-200 bg-white px-4 text-[10px] font-bold text-slate-500 transition hover:border-slate-300 hover:text-[#14283D] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveAnnouncement}
+                  disabled={
+                    announcementSaving ||
+                    !announcementForm.text.trim()
+                  }
+                  className="flex h-10 items-center justify-center gap-2 bg-[#0789A6] px-5 text-[10px] font-bold text-white transition hover:bg-[#067d96] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+
+                  {announcementSaving ? (
+                    <>
+                      <RefreshCw
+                        size={13}
+                        className="animate-spin"
+                      />
+
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={13} />
+
+                      {editingAnnouncementId
+                        ? "Update Announcement"
+                        : "Add Announcement"}
+                    </>
+                  )}
+
+                </button>
+
+              </div>
 
             </div>
 
-            <div className="p-4 sm:p-5">
+          </div>
+        )}
 
-              {announcementLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-3 w-32 rounded bg-slate-100" />
-                  <div className="mt-3 h-11 w-full rounded bg-slate-100" />
-                </div>
-              ) : (
-                <>
+        {/* ==================================================
+            ANNOUNCEMENT LIST
+        ================================================== */}
 
-                  {announcementError && (
-                    <div className="mb-4 flex items-start gap-2 border border-red-200 bg-red-50 p-3">
+        <div>
 
-                      <AlertCircle
-                        size={14}
-                        className="mt-0.5 shrink-0 text-red-500"
-                      />
+          <div className="mb-2 flex items-center justify-between">
 
-                      <p className="text-[10px] leading-4 text-red-600">
-                        {announcementError}
-                      </p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
+              Managed Announcements
+            </p>
 
-                    </div>
-                  )}
+            <span className="text-[9px] font-semibold text-slate-400">
+              {announcementMessages.length}{" "}
+              {announcementMessages.length === 1
+                ? "message"
+                : "messages"}
+            </span>
 
-                  {announcementSuccess && (
-                    <div className="mb-4 flex items-start gap-2 border border-emerald-200 bg-emerald-50 p-3">
+          </div>
 
-                      <CheckCircle2
-                        size={14}
-                        className="mt-0.5 shrink-0 text-emerald-500"
-                      />
+          {announcementMessages.length === 0 ? (
+            <div className="border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center">
 
-                      <p className="text-[10px] leading-4 text-emerald-600">
-                        {announcementSuccess}
-                      </p>
+              <div className="mx-auto flex h-9 w-9 items-center justify-center border border-slate-200 bg-white text-slate-300">
 
-                    </div>
-                  )}
+                <Megaphone
+                  size={16}
+                />
 
-                  {!announcementEditing ? (
-                    <div>
+              </div>
 
-                      <div className="border border-slate-200 bg-slate-50/60 p-4">
+              <p className="mt-3 text-[11px] font-bold text-[#14283D]">
+                No announcements yet
+              </p>
 
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="mt-1 text-[9px] leading-4 text-slate-400">
+                Add your first announcement to display it on the website.
+              </p>
 
-                          <div className="min-w-0">
+              <button
+                type="button"
+                onClick={startAddAnnouncement}
+                className="mt-4 inline-flex h-9 items-center gap-2 bg-[#0789A6] px-4 text-[10px] font-bold text-white transition hover:bg-[#067d96]"
+              >
+                <Plus size={13} />
+                Add Announcement
+              </button>
 
-                            <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                              Current Message
-                            </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
 
-                            <p className="text-xs font-semibold leading-5 text-[#14283D] sm:text-sm">
-                              {announcementMessage ||
-                                "No announcement configured."}
-                            </p>
+              {announcementMessages.map(
+                (item, index) => (
+                  <div
+                    key={item.id}
+                    className={`border bg-white transition ${
+                      item.enabled
+                        ? "border-slate-200"
+                        : "border-slate-200 bg-slate-50/60"
+                    }`}
+                  >
 
-                          </div>
+                    <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
 
-                          <div className="flex shrink-0 items-center gap-2">
+                      {/* ORDER NUMBER */}
 
-                            <button
-                              onClick={() =>
-                                setAnnouncementEditing(
-                                  true
-                                )
-                              }
-                              className="flex h-9 items-center gap-2 border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 transition hover:border-slate-300 hover:text-[#14283D]"
-                            >
-                              <Pencil
-                                size={13}
-                              />
-                              Edit
-                            </button>
+                      <div className="flex shrink-0 items-center gap-3 sm:w-[48px] sm:flex-col sm:gap-1">
 
-                            <button
-                              onClick={
-                                handleToggleAnnouncement
-                              }
-                              disabled={
-                                announcementSaving
-                              }
-                              className={`flex h-9 items-center gap-2 px-3 text-[10px] font-bold transition disabled:opacity-50 ${
-                                announcementActive
-                                  ? "border border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:text-red-600"
-                                  : "bg-[#0789A6] text-white hover:bg-[#067d96]"
-                              }`}
-                            >
-                              {announcementActive ? (
-                                <>
-                                  <EyeOff
-                                    size={13}
-                                  />
-                                  Hide
-                                </>
-                              ) : (
-                                <>
-                                  <Eye
-                                    size={13}
-                                  />
-                                  Show
-                                </>
-                              )}
-                            </button>
-
-                          </div>
-
+                        <div className="flex h-8 w-8 items-center justify-center bg-[#14283D] text-[10px] font-bold text-white">
+                          {index + 1}
                         </div>
+
+                        <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">
+                          Order
+                        </span>
 
                       </div>
 
-                    </div>
-                  ) : (
-                    <div>
+                      {/* MESSAGE */}
 
-                      <div>
+                      <div className="min-w-0 flex-1">
 
-                        <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-2">
 
-                          <label
-                            htmlFor="announcement-message"
-                            className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500"
+                          <p
+                            className={`text-xs font-semibold leading-5 sm:text-sm ${
+                              item.enabled
+                                ? "text-[#14283D]"
+                                : "text-slate-400"
+                            }`}
                           >
-                            Announcement Message
-                          </label>
+                            {item.text}
+                          </p>
 
-                          <span className="text-[9px] text-slate-400">
-                            {
-                              announcementMessage.length
-                            }
-                            /160
+                        </div>
+
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[8px] font-bold ${
+                              item.enabled
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-slate-100 text-slate-400"
+                            }`}
+                          >
+
+                            <span
+                              className={`h-1 w-1 rounded-full ${
+                                item.enabled
+                                  ? "bg-emerald-500"
+                                  : "bg-slate-400"
+                              }`}
+                            />
+
+                            {item.enabled
+                              ? "Active"
+                              : "Inactive"}
+
+                          </span>
+
+                          <span className="text-[8px] text-slate-300">
+                            Position{" "}
+                            {index + 1}
                           </span>
 
                         </div>
 
-                        <textarea
-                          id="announcement-message"
-                          value={
-                            announcementMessage
-                          }
-                          onChange={(e) => {
-                            if (
-                              e.target.value
-                                .length <=
-                              160
-                            ) {
-                              setAnnouncementMessage(
-                                e.target.value
-                              );
-                            }
-                          }}
-                          rows={3}
-                          maxLength={160}
-                          placeholder="Example: Delivery all over Pakistan."
-                          className="w-full resize-none border border-slate-200 bg-white px-3 py-3 text-xs font-medium leading-5 text-[#14283D] outline-none transition placeholder:text-slate-300 focus:border-[#0789A6] focus:ring-2 focus:ring-[#0789A6]/10"
-                        />
-
                       </div>
 
-                      <div className="mt-4">
+                      {/* ACTIONS */}
 
-                        <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          Preview
-                        </p>
+                      <div className="flex shrink-0 items-center justify-between gap-1 border-t border-slate-100 pt-3 sm:border-0 sm:pt-0">
 
-                        <div className="overflow-hidden border border-slate-200">
-
-                          <div className="flex min-h-[42px] items-center justify-center bg-[#14283D] px-4 py-2 text-center">
-
-                            <div className="flex items-center justify-center gap-2">
-
-                              <Megaphone
-                                size={13}
-                                className="shrink-0 text-white/70"
-                              />
-
-                              <p className="text-[10px] font-semibold leading-4 text-white sm:text-[11px]">
-                                {announcementMessage ||
-                                  "Your announcement will appear here."}
-                              </p>
-
-                            </div>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-4 border border-slate-200 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-
-                        <div>
-
-                          <p className="text-[11px] font-bold text-[#14283D]">
-                            Display announcement
-                          </p>
-
-                          <p className="mt-1 text-[9px] leading-4 text-slate-400">
-                            Turn this off if you temporarily don't want the bar visible.
-                          </p>
-
-                        </div>
+                        {/* MOVE UP */}
 
                         <button
                           type="button"
                           onClick={() =>
-                            setAnnouncementActive(
-                              (value) =>
-                                !value
+                            handleMoveAnnouncementUp(
+                              index
                             )
                           }
-                          className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                            announcementActive
-                              ? "bg-[#0789A6]"
-                              : "bg-slate-300"
-                          }`}
+                          disabled={
+                            index === 0 ||
+                            announcementSaving
+                          }
+                          className="flex h-8 w-8 items-center justify-center border border-slate-200 bg-white text-slate-400 transition hover:border-[#0789A6]/30 hover:text-[#0789A6] disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Move up"
                         >
-                          <span
-                            className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
-                              announcementActive
-                                ? "left-6"
-                                : "left-1"
-                            }`}
+                          <ArrowUp
+                            size={13}
                           />
                         </button>
 
-                      </div>
-
-                      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        {/* MOVE DOWN */}
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setAnnouncementMessage(
-                              announcement?.message ||
-                                ""
-                            );
-
-                            setAnnouncementActive(
-                              announcement?.enabled ??
-                                true
-                            );
-
-                            setAnnouncementEditing(
-                              false
-                            );
-
-                            setAnnouncementError(
-                              ""
-                            );
-
-                            setAnnouncementSuccess(
-                              ""
-                            );
-                          }}
+                          onClick={() =>
+                            handleMoveAnnouncementDown(
+                              index
+                            )
+                          }
                           disabled={
+                            index ===
+                              announcementMessages.length -
+                                1 ||
                             announcementSaving
                           }
-                          className="h-10 border border-slate-200 bg-white px-4 text-[10px] font-bold text-slate-500 transition hover:border-slate-300 hover:text-[#14283D]"
+                          className="flex h-8 w-8 items-center justify-center border border-slate-200 bg-white text-slate-400 transition hover:border-[#0789A6]/30 hover:text-[#0789A6] disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Move down"
                         >
-                          Cancel
+                          <ArrowDown
+                            size={13}
+                          />
                         </button>
 
+                        {/* TOGGLE */}
+
                         <button
                           type="button"
-                          onClick={
-                            handleSaveAnnouncement
+                          onClick={() =>
+                            handleToggleAnnouncementItem(
+                              item
+                            )
                           }
                           disabled={
                             announcementSaving
                           }
-                          className="flex h-10 items-center justify-center gap-2 bg-[#0789A6] px-5 text-[10px] font-bold text-white transition hover:bg-[#067d96] disabled:opacity-50"
+                          className={`flex h-8 w-8 items-center justify-center border transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            item.enabled
+                              ? "border-emerald-100 bg-emerald-50 text-emerald-500 hover:border-emerald-200"
+                              : "border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-300"
+                          }`}
+                          title={
+                            item.enabled
+                              ? "Hide announcement"
+                              : "Show announcement"
+                          }
                         >
-                          {announcementSaving ? (
-                            <>
-                              <RefreshCw
-                                size={13}
-                                className="animate-spin"
-                              />
-                              Saving...
-                            </>
+                          {item.enabled ? (
+                            <Eye
+                              size={13}
+                            />
                           ) : (
-                            <>
-                              <Save size={13} />
-                              Save Announcement
-                            </>
+                            <EyeOff
+                              size={13}
+                            />
+                          )}
+                        </button>
+
+                        {/* EDIT */}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startEditAnnouncement(
+                              item
+                            )
+                          }
+                          disabled={
+                            announcementSaving
+                          }
+                          className="flex h-8 w-8 items-center justify-center border border-slate-200 bg-white text-slate-400 transition hover:border-[#0789A6]/30 hover:text-[#0789A6] disabled:opacity-50"
+                          title="Edit announcement"
+                        >
+                          <Pencil
+                            size={13}
+                          />
+                        </button>
+
+                        {/* DELETE */}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDeleteAnnouncement(
+                              item
+                            )
+                          }
+                          disabled={
+                            announcementDeleting ===
+                              item.id ||
+                            announcementSaving
+                          }
+                          className="flex h-8 w-8 items-center justify-center border border-slate-200 bg-white text-slate-400 transition hover:border-red-200 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="Delete announcement"
+                        >
+                          {announcementDeleting ===
+                          item.id ? (
+                            <RefreshCw
+                              size={13}
+                              className="animate-spin"
+                            />
+                          ) : (
+                            <Trash2
+                              size={13}
+                            />
                           )}
                         </button>
 
                       </div>
 
                     </div>
-                  )}
 
-                </>
+                  </div>
+                )
               )}
 
             </div>
-          </section>
+          )}
+
+        </div>
+
+        {/* ==================================================
+            DISPLAY ANNOUNCEMENT BAR
+        ================================================== */}
+
+        <div className="mt-5 flex flex-col gap-4 border border-slate-200 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              {announcementActive ? (
+                <Eye
+                  size={14}
+                  className="text-[#0789A6]"
+                />
+              ) : (
+                <EyeOff
+                  size={14}
+                  className="text-slate-400"
+                />
+              )}
+
+              <p className="text-[11px] font-bold text-[#14283D]">
+                Display Announcement Bar
+              </p>
+
+            </div>
+
+            <p className="mt-1 text-[9px] leading-4 text-slate-400">
+              Control the visibility of the entire announcement bar.
+              Customers cannot close or hide it.
+            </p>
+
+          </div>
+
+          <button
+            type="button"
+            onClick={handleToggleAnnouncement}
+            disabled={
+              announcementSaving
+            }
+            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+              announcementActive
+                ? "bg-[#0789A6]"
+                : "bg-slate-300"
+            }`}
+            aria-label={
+              announcementActive
+                ? "Hide announcement bar"
+                : "Show announcement bar"
+            }
+          >
+
+            <span
+              className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                announcementActive
+                  ? "left-6"
+                  : "left-1"
+              }`}
+            />
+
+          </button>
+
+        </div>
+
+        {/* ==================================================
+            WEBSITE PREVIEW
+        ================================================== */}
+
+        <div className="mt-5">
+
+          <div className="mb-2 flex items-center justify-between">
+
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
+              Website Preview
+            </p>
+
+            <span className="text-[8px] font-medium text-slate-400">
+              Customer view
+            </span>
+
+          </div>
+
+          <div className="overflow-hidden border border-slate-200">
+
+            <div className="flex min-h-[42px] items-center justify-center bg-[#14283D] px-4 py-2 text-center">
+
+              {announcementActive &&
+              announcementMessages.filter(
+                (item) =>
+                  item.enabled
+              ).length > 0 ? (
+                <div className="flex items-center justify-center gap-2">
+
+                  <Megaphone
+                    size={13}
+                    className="shrink-0 text-white/70"
+                  />
+
+                  <p className="text-[10px] font-semibold leading-4 text-white sm:text-[11px]">
+                    {
+                      announcementMessages.filter(
+                        (item) =>
+                          item.enabled
+                      )[0].text
+                    }
+                  </p>
+
+                </div>
+              ) : (
+                <p className="text-[10px] font-medium text-white/50">
+                  Announcement bar is currently hidden.
+                </p>
+              )}
+
+            </div>
+
+            {/* NO CUSTOMER CLOSE BUTTON */}
+
+          </div>
+
+        </div>
+
+      </>
+    )}
+
+  </div>
+
+</section>
 
           {/* ==================================================
               STATISTICS
